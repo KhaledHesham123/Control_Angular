@@ -1,0 +1,215 @@
+<section class="board" dir="rtl" lang="ar" [attr.aria-busy]="loading()">
+  <header class="mast">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="36" height="36">
+          <circle cx="24" cy="24" r="22" fill="none" stroke="currentColor" stroke-width="2" />
+          <path d="M24 8v32M10 28h28M14 28c2 7 6 10 10 10s8-3 10-10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          <circle cx="24" cy="16" r="3" fill="currentColor" />
+        </svg>
+      </span>
+      <div>
+        <p class="eyebrow">Ships Control</p>
+        <h1>عروض الأسعار</h1>
+      </div>
+    </div>
+    <p class="lede">عروض قطع غيار السفن، مع البنود والأسعار ومدة التسليم.</p>
+  </header>
+
+  <form class="toolbar" (ngSubmit)="search()">
+    <label class="search">
+      <span>بحث</span>
+      <input
+        name="searchTerm"
+        type="search"
+        [(ngModel)]="searchTerm"
+        placeholder="رقم العرض، السفينة، المورد، المصنّع، أو المحرك"
+        autocomplete="off"
+      />
+    </label>
+    <div class="toolbar-actions">
+      <button type="submit" [disabled]="loading()">بحث</button>
+      @if (searchTerm) {
+        <button type="button" class="ghost" (click)="clearSearch()" [disabled]="loading()">مسح</button>
+      }
+      <label class="page-size">
+        <span>في الصفحة</span>
+        <select
+          name="pageSize"
+          [ngModel]="pageSize"
+          (ngModelChange)="changePageSize($event)"
+          [disabled]="loading()"
+        >
+          @for (size of pageSizes; track size) {
+            <option [ngValue]="size">{{ size }}</option>
+          }
+        </select>
+      </label>
+    </div>
+  </form>
+
+  <div class="stats">
+    <article>
+      <span>عدد العروض</span>
+      <strong>{{ count() }}</strong>
+    </article>
+    <article>
+      <span>بنود الصفحة</span>
+      <strong>{{ pageItemsCount() }}</strong>
+    </article>
+    <article>
+      <span>إجمالي الصفحة</span>
+      <strong class="ltr">{{ pageTotalLabel() }}</strong>
+    </article>
+    <article>
+      <span>النطاق</span>
+      <strong class="ltr">{{ rangeLabel() }}</strong>
+    </article>
+  </div>
+
+  @if (loading()) {
+    <div class="progress" role="progressbar" aria-label="جارٍ تحميل عروض الأسعار"></div>
+  }
+
+  @if (error()) {
+    <div class="banner" role="alert">
+      <p>{{ error() }}</p>
+      <button type="button" (click)="load()">إعادة المحاولة</button>
+    </div>
+  } @else if (loading() && quotations().length === 0) {
+    <div class="skeleton" aria-hidden="true">
+      <span></span>
+      <span></span>
+    </div>
+  } @else if (quotations().length === 0) {
+    <div class="empty">
+      <h2>لا توجد عروض أسعار</h2>
+      <p>{{ status() || 'جرّب عبارة بحث أخرى.' }}</p>
+    </div>
+  } @else {
+    <div class="list">
+      @for (quotation of quotations(); track quotation.id) {
+        <article class="quote">
+          <header class="quote-head">
+            <div>
+              <p class="kicker">عرض سعر <span class="ltr">{{ quotation.quotationNo }}</span></p>
+              <h2>{{ quotation.supplierName }}</h2>
+              <p class="when">{{ dateLabel(quotation.quotationDate) }}</p>
+            </div>
+            <div class="totals">
+              <span>الإجمالي</span>
+              <strong class="ltr">{{ money(quotation.total, quotation.currency) }}</strong>
+              <small>الفرعي <span class="ltr">{{ money(quotation.subTotal, quotation.currency) }}</span></small>
+            </div>
+          </header>
+
+          <dl class="facts">
+            <div>
+              <dt>السفينة</dt>
+              <dd class="ltr">{{ quotation.vesselName }}</dd>
+            </div>
+            <div>
+              <dt>المصنّع</dt>
+              <dd class="ltr">{{ quotation.manufacturer }}</dd>
+            </div>
+            <div>
+              <dt>المحرك</dt>
+              <dd class="ltr">{{ quotation.engineType }}</dd>
+            </div>
+            <div>
+              <dt>الدفع</dt>
+              <dd class="ltr">{{ quotation.paymentTerm }}</dd>
+            </div>
+            <div>
+              <dt>الصلاحية</dt>
+              <dd class="ltr">{{ quotation.validity }}</dd>
+            </div>
+            <div>
+              <dt>العملة</dt>
+              <dd class="ltr">{{ quotation.currency }}</dd>
+            </div>
+            <div>
+              <dt>البنود</dt>
+              <dd>{{ quotation.itemsCount }}</dd>
+            </div>
+          </dl>
+
+          @if (quotation.partCondition) {
+            <p class="condition">{{ quotation.partCondition }}</p>
+          }
+
+          <button
+            type="button"
+            class="toggle"
+            [attr.aria-expanded]="expandedId() === quotation.id"
+            (click)="toggle(quotation.id)"
+          >
+            {{ expandedId() === quotation.id ? 'إخفاء البنود' : 'عرض البنود' }}
+            <span>({{ quotation.itemsCount }})</span>
+          </button>
+
+          @if (expandedId() === quotation.id) {
+            <div class="items">
+              @if (quotation.items.length === 0) {
+                <p class="muted">لا توجد بنود لهذا العرض.</p>
+              } @else {
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>القطعة</th>
+                      <th>رقم القطعة</th>
+                      <th>الكمية</th>
+                      <th>الوحدة</th>
+                      <th>سعر الوحدة</th>
+                      <th>الإجمالي</th>
+                      <th>التسليم</th>
+                      <th>ملاحظات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (item of quotation.items; track item.id) {
+                      <tr>
+                        <td class="ltr">{{ item.itemNo }}</td>
+                        <td>{{ item.partName }}</td>
+                        <td class="ltr">{{ item.partNumber }}</td>
+                        <td class="ltr">{{ item.quantity }}</td>
+                        <td class="ltr">{{ item.unit }}</td>
+                        <td class="ltr">{{ money(item.unitPriceUSD, quotation.currency) }}</td>
+                        <td class="ltr">{{ money(item.totalPriceUSD, quotation.currency) }}</td>
+                        <td class="ltr">{{ item.deliveryTime }}</td>
+                        <td>{{ item.remarks || '—' }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            </div>
+          }
+        </article>
+      }
+    </div>
+
+    @if (totalPages > 1) {
+      <nav class="pager" aria-label="صفحات عروض الأسعار">
+        <button type="button" (click)="goTo(pageNumber() - 1)" [disabled]="pageNumber() === 1 || loading()">
+          السابق
+        </button>
+        @for (page of pageNumbers; track page) {
+          <button
+            type="button"
+            [class.current]="page === pageNumber()"
+            [attr.aria-current]="page === pageNumber() ? 'page' : null"
+            (click)="goTo(page)"
+            [disabled]="loading()"
+          >
+            {{ page }}
+          </button>
+        }
+        <button type="button" (click)="goTo(pageNumber() + 1)" [disabled]="pageNumber() === totalPages || loading()">
+          التالي
+        </button>
+      </nav>
+    }
+  }
+</section>

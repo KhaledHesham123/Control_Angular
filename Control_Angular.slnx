@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Control_Angular/Control_Angular.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+</Solution>

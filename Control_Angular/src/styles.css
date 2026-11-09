@@ -1,0 +1,11 @@
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #f3f0e8;
+  color: #1c2430;
+  font-family: "Cairo", "Segoe UI", Tahoma, sans-serif;
+}
