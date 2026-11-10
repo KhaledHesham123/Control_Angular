@@ -1,0 +1,163 @@
+<section class="board" dir="ltr" lang="en">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">Control Center</p>
+      <h1>Vessel Management</h1>
+    </div>
+    <div class="mast-actions">
+      <button type="button" class="mast-btn" (click)="back()">Back</button>
+      <button type="button" class="mast-btn" (click)="loadVessels()" [disabled]="loading()">Refresh</button>
+      <button type="button" class="mast-btn primary" (click)="create()">Create Vessel</button>
+    </div>
+  </header>
+
+  <div class="toolbar panel">
+    <label class="check">
+      <input
+        type="checkbox"
+        [checked]="includeInactive"
+        (change)="onIncludeInactiveChange(($any($event.target)).checked)"
+        [disabled]="loading()"
+      />
+      <span>Include inactive</span>
+    </label>
+  </div>
+
+  @if (error()) {
+    <div class="banner error" role="alert">
+      <p>{{ error() }}</p>
+      <button type="button" (click)="loadVessels()">Retry</button>
+    </div>
+  }
+
+  @if (success() && !error()) {
+    <div class="banner ok" role="status">
+      <div>
+        <strong>Done</strong>
+        <p>{{ success() }}</p>
+      </div>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="progress" role="progressbar" aria-label="Loading vessels"></div>
+  } @else if (vessels().length === 0) {
+    <div class="empty panel">
+      <h2>No vessels</h2>
+      <p>Vessels from the API will appear here.</p>
+    </div>
+  } @else {
+    <div class="list">
+      @for (vessel of vessels(); track vessel.id) {
+        <article class="item-card panel" [class.open]="expandedId() === vessel.id">
+          <div class="row">
+            <div class="identity">
+              <div class="avatar" aria-hidden="true">{{ vessel.name.slice(0, 1) }}</div>
+              <div class="meta">
+                <h2>{{ vessel.name }}</h2>
+              </div>
+            </div>
+
+            <div class="actions">
+              <button type="button" class="ghost" (click)="toggleDetails(vessel.id)">
+                {{ expandedId() === vessel.id ? 'Hide' : 'Details' }}
+              </button>
+              <button type="button" class="soft" (click)="edit(vessel.id)">Edit</button>
+              <button
+                type="button"
+                class="danger"
+                (click)="askDelete(vessel)"
+                [disabled]="!!deletingId()"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+
+          @if (expandedId() === vessel.id) {
+            <div class="details">
+              @if (detailsLoadingId() === vessel.id) {
+                <p class="muted">Loading details...</p>
+              } @else if (details()[vessel.id]; as detail) {
+                <div class="fields">
+                  <div class="field">
+                    <span class="label">IMO</span>
+                    <strong class="value ltr">{{ detail.imoNumber || '—' }}</strong>
+                  </div>
+                  <div class="field">
+                    <span class="label">Flag</span>
+                    <strong class="value">{{ detail.flag || '—' }}</strong>
+                  </div>
+                  <div class="field">
+                    <span class="label">Active</span>
+                    <strong class="value" [class.on]="detail.isActive" [class.off]="!detail.isActive">
+                      {{ detail.isActive ? 'Yes' : 'No' }}
+                    </strong>
+                  </div>
+                  <div class="field">
+                    <span class="label">Users</span>
+                    <strong class="value">{{ detail.users.length }}</strong>
+                  </div>
+                </div>
+
+                @if (detail.notes) {
+                  <div class="desc-box">
+                    <span class="label">Notes</span>
+                    <p class="desc">{{ detail.notes }}</p>
+                  </div>
+                }
+
+                <div class="stocks-block">
+                  <div class="stocks-head">
+                    <h3>Linked Users</h3>
+                    <span class="muted">{{ detail.users.length }}</span>
+                  </div>
+
+                  @if (detail.users.length === 0) {
+                    <p class="muted">No linked users.</p>
+                  } @else {
+                    <ul class="stocks">
+                      @for (user of detail.users; track user.id) {
+                        <li>
+                          <div>
+                            <strong>{{ user.fullName || 'Unnamed user' }}</strong>
+                            <p class="muted ltr">{{ user.email }}</p>
+                          </div>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </div>
+              } @else {
+                <p class="muted">No details available.</p>
+              }
+            </div>
+          }
+        </article>
+      }
+    </div>
+  }
+
+  @if (pendingDelete(); as target) {
+    <div class="modal-backdrop" (click)="cancelDelete()" role="presentation"></div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-vessel-title">
+      <div class="modal-icon" aria-hidden="true">!</div>
+      <div class="modal-copy">
+        <h2 id="delete-vessel-title">Delete vessel?</h2>
+        <p>
+          You’re about to remove
+          <strong>{{ target.name }}</strong>
+          . This can’t be undone.
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="ghost" (click)="cancelDelete()" [disabled]="!!deletingId()">
+          Cancel
+        </button>
+        <button type="button" class="danger solid" (click)="confirmDelete()" [disabled]="!!deletingId()">
+          {{ deletingId() === target.id ? 'Deleting...' : 'Delete vessel' }}
+        </button>
+      </div>
+    </div>
+  }
+</section>

@@ -1,0 +1,242 @@
+<section class="board" dir="ltr" lang="en">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">Product Management</p>
+      <h1>Edit Product</h1>
+      <p class="lede">Update product details and link or unlink vessels.</p>
+    </div>
+    <button type="button" class="ghost" (click)="back()">Back to products</button>
+  </header>
+
+  @if (error()) {
+    <div class="banner error" role="alert">{{ error() }}</div>
+  }
+  @if (success()) {
+    <div class="banner ok" role="status">{{ success() }}</div>
+  }
+
+  @if (loading()) {
+    <div class="progress" role="progressbar" aria-label="Loading product"></div>
+  } @else if (product(); as current) {
+    <form class="panel" (ngSubmit)="submit()">
+      <div class="summary">
+        <div>
+          <h2>{{ current.name }}</h2>
+          <p class="muted">{{ current.categoryName }}</p>
+        </div>
+        @if (imageUrl(imagePreview || currentImagePath); as src) {
+          <img [src]="src" [alt]="current.name" />
+        }
+      </div>
+
+      <div class="grid">
+        <label>
+          <span>Name</span>
+          <input name="name" type="text" [(ngModel)]="name" [disabled]="submitting()" required />
+        </label>
+        <label>
+          <span>Code</span>
+          <input name="code" class="ltr" type="text" [(ngModel)]="code" [disabled]="submitting()" />
+        </label>
+        <label>
+          <span>Default Unit</span>
+          <input
+            name="defaultUnit"
+            class="ltr"
+            type="text"
+            [(ngModel)]="defaultUnit"
+            [disabled]="submitting()"
+            required
+          />
+        </label>
+        <label>
+          <span>Scope</span>
+          <select
+            name="scope"
+            [ngModel]="scope"
+            (ngModelChange)="onScopeChange($event)"
+            [disabled]="submitting()"
+          >
+            <option [ngValue]="ProductScope.General">General</option>
+            <option [ngValue]="ProductScope.VesselSpecific">VesselSpecific</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="full">
+        <span>Description</span>
+        <textarea
+          name="description"
+          rows="3"
+          [(ngModel)]="description"
+          [disabled]="submitting()"
+        ></textarea>
+      </label>
+
+      <label class="check">
+        <input name="isActive" type="checkbox" [(ngModel)]="isActive" [disabled]="submitting()" />
+        <span>Active</span>
+      </label>
+
+      <label class="full">
+        <span>Image</span>
+        <input
+          #imageInput
+          type="file"
+          accept="image/*"
+          (change)="onImageSelected($event)"
+          [disabled]="submitting()"
+        />
+      </label>
+
+      @if (imagePreview || currentImagePath) {
+        <div class="image-actions">
+          <p class="muted">
+            @if (imagePreview) {
+              New image ready to upload.
+            } @else {
+              Current image is saved.
+            }
+          </p>
+          @if (imagePreview) {
+            <button type="button" class="ghost" (click)="clearImage(imageInput)">Clear image</button>
+          }
+        </div>
+      }
+
+      <div class="actions">
+        <button type="submit" [disabled]="submitting()">
+          {{ submitting() ? 'Saving...' : 'Save Changes' }}
+        </button>
+      </div>
+    </form>
+
+    @if (scope === ProductScope.VesselSpecific) {
+      <section class="panel vessels">
+        <header class="section-head">
+          <div>
+            <h2>Vessel Linking</h2>
+            <p class="muted">Available only when Scope is VesselSpecific.</p>
+          </div>
+          <button
+            type="button"
+            class="ghost"
+            (click)="loadVesselLookups()"
+            [disabled]="loadingVessels() || linking() || unlinking()"
+          >
+            Refresh vessels
+          </button>
+        </header>
+
+        @if (loadingVessels()) {
+          <p class="muted">Loading vessel lists...</p>
+        } @else {
+          <div class="vessel-grid">
+            <div class="vessel-col">
+              <h3>Unlinked vessels</h3>
+              @if (availableVessels().length === 0) {
+                <p class="muted">No vessels available to link.</p>
+              } @else {
+                <ul class="checks">
+                  @for (vessel of availableVessels(); track vessel.id) {
+                    <li>
+                      <label class="check">
+                        <input
+                          type="checkbox"
+                          [checked]="isLinkSelected(vessel.id)"
+                          (change)="toggleLinkVessel(vessel.id)"
+                          [disabled]="linking()"
+                        />
+                        <span>{{ vessel.name }}</span>
+                      </label>
+                    </li>
+                  }
+                </ul>
+              }
+
+              <label>
+                <span>Quantity On Hand</span>
+                <input
+                  class="ltr"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  [(ngModel)]="linkQuantityOnHand"
+                  [ngModelOptions]="{ standalone: true }"
+                  [disabled]="linking()"
+                />
+              </label>
+
+              <button
+                type="button"
+                class="primary"
+                (click)="linkVessels()"
+                [disabled]="linking() || selectedLinkVesselIds.length === 0"
+              >
+                {{ linking() ? 'Linking...' : 'Link Vessel' }}
+              </button>
+            </div>
+
+            <div class="vessel-col">
+              <h3>Linked vessels</h3>
+              @if (linkedVessels().length === 0) {
+                <p class="muted">No linked vessels.</p>
+              } @else {
+                <ul class="checks">
+                  @for (vessel of linkedVessels(); track vessel.id) {
+                    <li>
+                      <label class="check">
+                        <input
+                          type="checkbox"
+                          [checked]="isUnlinkSelected(vessel.id)"
+                          (change)="toggleUnlinkVessel(vessel.id)"
+                          [disabled]="unlinking()"
+                        />
+                        <span>{{ vessel.name }}</span>
+                      </label>
+                    </li>
+                  }
+                </ul>
+              }
+
+              <button
+                type="button"
+                class="danger"
+                (click)="unlinkVessels()"
+                [disabled]="unlinking() || selectedUnlinkVesselIds.length === 0"
+              >
+                {{ unlinking() ? 'Unlinking...' : 'Unlink Vessel' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="stocks">
+            <h3>Current vessel stocks</h3>
+            @if (current.vesselStocks.length === 0) {
+              <p class="muted">No stock quantities recorded.</p>
+            } @else {
+              <ul>
+                @for (stock of current.vesselStocks; track stock.vesselId) {
+                  <li>
+                    <strong>{{ stock.vesselName }}</strong>
+                    <span class="ltr">{{ stock.quantityOnHand }}</span>
+                  </li>
+                }
+              </ul>
+            }
+          </div>
+        }
+      </section>
+    } @else {
+      <div class="panel">
+        <p class="muted">Scope is General — vessel selection is disabled. Switch to VesselSpecific to link vessels.</p>
+      </div>
+    }
+  } @else {
+    <div class="empty panel">
+      <h2>Product unavailable</h2>
+      <p class="muted">Check the id or go back to the products list.</p>
+      <button type="button" class="primary" (click)="back()">Back</button>
+    </div>
+  }
+</section>

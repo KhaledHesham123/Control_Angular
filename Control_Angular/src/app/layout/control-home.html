@@ -1,0 +1,19 @@
+<section class="home" dir="ltr" lang="en">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">Ships Control</p>
+      <h1>Control Center</h1>
+      <p class="lede">Choose a module to get started.</p>
+    </div>
+  </header>
+
+  <div class="modules">
+    @for (item of modules; track item.route) {
+      <button type="button" class="module" (click)="open(item.route)">
+        <h2>{{ item.title }}</h2>
+        <p>{{ item.description }}</p>
+        <span class="go">Open</span>
+      </button>
+    }
+  </div>
+</section>

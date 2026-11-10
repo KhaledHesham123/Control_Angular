@@ -1,0 +1,336 @@
+<section class="board" dir="rtl" lang="ar" [attr.aria-busy]="loadingProducts() || creating() || loadingRfq() || generating()">
+  <header class="mast">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="36" height="36">
+          <circle cx="24" cy="24" r="22" fill="none" stroke="currentColor" stroke-width="2" />
+          <path d="M24 8v32M10 28h28M14 28c2 7 6 10 10 10s8-3 10-10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          <circle cx="24" cy="16" r="3" fill="currentColor" />
+        </svg>
+      </span>
+      <div>
+        <p class="eyebrow">Ships Control</p>
+        <h1>إنشاء RFQ</h1>
+      </div>
+    </div>
+    <p class="lede">اختر فئة واحدةً ومنتجاتها، أنشئ الطلب، ثم ولّد إيميلات الموردين بالـ AI.</p>
+  </header>
+
+  <ol class="steps" aria-label="خطوات إنشاء RFQ">
+    <li [class.active]="step() === 1" [class.done]="step() > 1">
+      <button type="button" (click)="goToStep(1)">
+        <span class="num">1</span>
+        <span>Create RFQ Request</span>
+      </button>
+    </li>
+    <li class="line" aria-hidden="true"></li>
+    <li [class.active]="step() === 2" [class.locked]="!rfqId()">
+      <button type="button" (click)="goToStep(2)" [disabled]="!rfqId()">
+        <span class="num">2</span>
+        <span>مراجعة وتوليد الإيميل</span>
+      </button>
+    </li>
+  </ol>
+
+  @if (error()) {
+    <div class="banner" role="alert">
+      <p>{{ error() }}</p>
+      @if (step() === 1 && selectedCategoryId()) {
+        <button type="button" (click)="loadProducts()">إعادة المحاولة</button>
+      } @else if (rfqId()) {
+        <button type="button" (click)="loadRfq(rfqId()!)">إعادة تحميل RFQ</button>
+      }
+    </div>
+  }
+
+  @if (status() && !error()) {
+    <p class="status-note">{{ status() }}</p>
+  }
+
+  @if (step() === 1) {
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>الخطوة 1 — اختيار المنتجات</h2>
+          <p>اختَر الفئة من Category Lookup، ثم حدّد منتجات الفئة دي فقط.</p>
+        </div>
+        <div class="panel-actions">
+          @if (selectedCategoryId()) {
+            <button type="button" class="ghost" (click)="clearCategorySelection()" [disabled]="creating()">
+              تغيير الفئة
+            </button>
+          }
+          <button
+            type="button"
+            class="primary"
+            (click)="createRfq()"
+            [disabled]="creating() || selectedCount() === 0"
+          >
+            {{ creating() ? 'جاري الإنشاء...' : 'Create RFQ Request' }}
+          </button>
+        </div>
+      </div>
+
+      <app-category-lookup
+        label="Category Lookup"
+        [categoryId]="selectedCategoryId()"
+        [disabled]="creating()"
+        [required]="true"
+        (categoryIdChange)="onCategoryChange($event)"
+        (loaded)="onCategoryLoaded($event)"
+        (failed)="onCategoryFailed($event)"
+      />
+
+      <label class="notes-field">
+        <span>ملاحظات الطلب (اختياري)</span>
+        <textarea
+          rows="2"
+          [ngModel]="requestNotes()"
+          (ngModelChange)="requestNotes.set($event)"
+          [disabled]="creating()"
+          placeholder="أي ملاحظات عامة على طلب RFQ"
+        ></textarea>
+      </label>
+
+      <div class="selection-summary">
+        <span>الفئة المختارة: <strong>{{ selectedCategoryName() || '—' }}</strong></span>
+        <span>المنتجات: <strong>{{ selectedCount() }}</strong></span>
+      </div>
+
+      @if (!selectedCategoryId()) {
+        <div class="empty">
+          <h3>ابدأ باختيار الفئة</h3>
+          <p>بعد اختيار الفئة هتظهر منتجاتها هنا.</p>
+        </div>
+      } @else if (loadingProducts()) {
+        <div class="progress" role="progressbar" aria-label="جارٍ تحميل المنتجات"></div>
+        <div class="skeleton" aria-hidden="true"><span></span><span></span></div>
+      } @else if (products().length === 0) {
+        <div class="empty">
+          <h3>لا توجد منتجات</h3>
+          <p>مفيش منتجات نشطة في الفئة المختارة.</p>
+        </div>
+      } @else {
+        <article class="category-card selected">
+          <header>
+            <div>
+              <h3>{{ selectedCategoryName() || 'المنتجات' }}</h3>
+            </div>
+            <span class="count">{{ products().length }} منتج</span>
+          </header>
+
+          <ul class="product-list">
+            @for (product of products(); track product.id) {
+              <li [class.checked]="isProductSelected(product.id)">
+                <label class="product-row">
+                  <input
+                    type="checkbox"
+                    [checked]="isProductSelected(product.id)"
+                    [disabled]="creating()"
+                    (change)="toggleProduct(product)"
+                  />
+                  <div class="product-meta">
+                    <strong>{{ product.name }}</strong>
+                    <span class="ltr">
+                      {{ product.code || 'بدون كود' }} · {{ product.defaultUnit }}
+                    </span>
+                    @if (product.description) {
+                      <small>{{ product.description }}</small>
+                    }
+                  </div>
+                </label>
+
+                @if (isProductSelected(product.id)) {
+                  <div class="product-edit">
+                    <label>
+                      <span>الكمية</span>
+                      <input
+                        class="ltr"
+                        type="number"
+                        min="1"
+                        [ngModel]="selectedProduct(product.id)?.quantity"
+                        (ngModelChange)="updateQuantity(product.id, $event)"
+                        [disabled]="creating()"
+                      />
+                    </label>
+                    <label class="grow">
+                      <span>ملاحظات البند</span>
+                      <input
+                        type="text"
+                        [ngModel]="selectedProduct(product.id)?.notes"
+                        (ngModelChange)="updateItemNotes(product.id, $event)"
+                        [disabled]="creating()"
+                        placeholder="اختياري"
+                      />
+                    </label>
+                  </div>
+                }
+              </li>
+            }
+          </ul>
+        </article>
+      }
+    </section>
+  }
+
+  @if (step() === 2) {
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>الخطوة 2 — بيانات RFQ وتوليد الإيميل</h2>
+          <p>راجع الطلب ثم استخدم Generate by AI لملء إيميلات الموردين.</p>
+        </div>
+        <div class="panel-actions">
+          <button type="button" class="ghost" (click)="startNew()">طلب جديد</button>
+          <button
+            type="button"
+            class="primary"
+            (click)="generateByAi()"
+            [disabled]="generating() || loadingRfq() || !rfqId()"
+          >
+            {{ generating() ? 'جاري التوليد...' : 'Generate by AI' }}
+          </button>
+        </div>
+      </div>
+
+      @if (loadingRfq()) {
+        <div class="progress" role="progressbar" aria-label="جارٍ تحميل RFQ"></div>
+      }
+
+      @if (rfq(); as current) {
+        <div class="rfq-summary">
+          <article>
+            <span>العنوان</span>
+            <strong>{{ generatedTitle() || current.title }}</strong>
+          </article>
+          <article>
+            <span>الفئة</span>
+            <strong>{{ current.categoryName }}</strong>
+          </article>
+          <article>
+            <span>الحالة</span>
+            <strong class="ltr">{{ rfqStatusLabel() }}</strong>
+          </article>
+          <article>
+            <span>عدد البنود</span>
+            <strong>{{ current.items.length }}</strong>
+          </article>
+        </div>
+
+        @if (current.notes) {
+          <p class="condition">{{ current.notes }}</p>
+        }
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>المنتج</th>
+                <th>الكود</th>
+                <th>الكمية</th>
+                <th>الوحدة</th>
+                <th>ملاحظات</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of current.items; track item.id) {
+                <tr>
+                  <td class="ltr">{{ item.itemNo }}</td>
+                  <td>
+                    <div>{{ item.name }}</div>
+                    @if (item.productDescription) {
+                      <small class="muted">{{ item.productDescription }}</small>
+                    }
+                  </td>
+                  <td class="ltr">{{ item.code || '—' }}</td>
+                  <td class="ltr">{{ item.quantity }}</td>
+                  <td class="ltr">{{ item.unit }}</td>
+                  <td>{{ item.notes || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="supplier-block">
+          <div class="block-head">
+            <h3>إيميلات الموردين</h3>
+            <p>
+              @if (generatedEmails().length > 0) {
+                تم التوليد لـ {{ generatedEmails().length }} مورد.
+              } @else {
+                الحقول فاضية حتى تضغط Generate by AI.
+              }
+            </p>
+          </div>
+
+          @if (supplierEmailCards().length === 0) {
+            <div class="empty compact">
+              <p>لا يوجد موردون مرتبطون بهذه الفئة حتى الآن.</p>
+            </div>
+          } @else {
+            <div class="email-grid">
+              @for (email of supplierEmailCards(); track email.supplierId) {
+                <article class="email-card" [class.generated]="email.source === 'generated'">
+                  <header>
+                    <div>
+                      <h4>{{ email.supplierName }}</h4>
+                      <p class="ltr">{{ email.supplierEmail || 'بدون بريد' }}</p>
+                    </div>
+                    <span class="tag">{{ email.source === 'generated' ? 'AI' : 'Draft' }}</span>
+                  </header>
+                  <label>
+                    <span>Subject</span>
+                    <input class="ltr" type="text" [value]="email.subject" readonly />
+                  </label>
+                  <label>
+                    <span>Body</span>
+                    <textarea class="ltr" rows="8" readonly [value]="email.body"></textarea>
+                  </label>
+                </article>
+              }
+            </div>
+          }
+        </div>
+
+        <div class="compose">
+          <div class="block-head">
+            <h3>خانة الإيميل العامة</h3>
+            <p>Subject و Body فاضيين في البداية، ويمتلئان بعد Generate by AI.</p>
+          </div>
+          <label>
+            <span>Subject</span>
+            <input
+              class="ltr"
+              type="text"
+              [ngModel]="emailSubject()"
+              (ngModelChange)="emailSubject.set($event)"
+              placeholder="Subject"
+            />
+          </label>
+          <label>
+            <span>Body</span>
+            <textarea
+              class="ltr"
+              rows="10"
+              [ngModel]="emailBody()"
+              (ngModelChange)="emailBody.set($event)"
+              placeholder="Body"
+            ></textarea>
+          </label>
+          <div class="compose-actions">
+            <button
+              type="button"
+              class="primary"
+              (click)="generateByAi()"
+              [disabled]="generating() || loadingRfq() || !rfqId()"
+            >
+              {{ generating() ? 'جاري التوليد...' : 'Generate by AI' }}
+            </button>
+          </div>
+        </div>
+      }
+    </section>
+  }
+</section>

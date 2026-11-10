@@ -76,6 +76,31 @@ h1 {
   line-height: 1.7;
 }
 
+.mast-side {
+  display: grid;
+  gap: 14px;
+  justify-items: end;
+}
+
+.site-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.site-nav a {
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: #f7f3ea;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.site-nav a.current {
+  background: #f0d59a;
+  color: #14324c;
+  font-weight: 700;
+}
+
 .toolbar,
 .stats,
 .quote,
@@ -391,6 +416,12 @@ td:last-child {
 
   .lede {
     max-width: none;
+  }
+
+  .mast-side,
+  .site-nav {
+    justify-items: start;
+    justify-content: start;
   }
 
   .stats,

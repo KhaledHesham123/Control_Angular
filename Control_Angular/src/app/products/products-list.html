@@ -1,0 +1,183 @@
+<section class="board" dir="ltr" lang="en">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">Control Center</p>
+      <h1>Product Management</h1>
+    </div>
+    <div class="mast-actions">
+      <button type="button" class="mast-btn" (click)="back()">Back</button>
+      <button type="button" class="mast-btn" (click)="loadProducts()" [disabled]="loading()">Refresh</button>
+      <button type="button" class="mast-btn primary" (click)="create()">Create Product</button>
+    </div>
+  </header>
+
+  <div class="toolbar panel">
+    <app-category-lookup
+      label="Category"
+      placeholder="All categories"
+      [categoryId]="categoryId"
+      [disabled]="loading()"
+      (categoryIdChange)="onCategoryChange($event)"
+      (failed)="onCategoryFailed($event)"
+    />
+  </div>
+
+  @if (error()) {
+    <div class="banner error" role="alert">
+      <p>{{ error() }}</p>
+      <button type="button" (click)="loadProducts()">Retry</button>
+    </div>
+  }
+
+  @if (success() && !error()) {
+    <div class="banner ok" role="status">
+      <div>
+        <strong>Done</strong>
+        <p>{{ success() }}</p>
+      </div>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="progress" role="progressbar" aria-label="Loading products"></div>
+  } @else if (products().length === 0) {
+    <div class="empty panel">
+      <h2>No products</h2>
+      <p>Products from the API will appear here.</p>
+    </div>
+  } @else {
+    <div class="list">
+      @for (product of products(); track product.id) {
+        <article class="product-card panel" [class.open]="expandedId() === product.id">
+          <div class="row">
+            <div class="identity">
+              <div class="media">
+                @if (imageUrl(product.imagePath); as src) {
+                  <img [src]="src" [alt]="product.name" />
+                } @else {
+                  <div class="placeholder">No Image</div>
+                }
+              </div>
+
+              <div class="meta">
+                <h2>{{ product.name }}</h2>
+                <div class="chips">
+                  <span class="chip">{{ product.categoryName }}</span>
+                  @if (product.quantityOnHand !== null && product.quantityOnHand !== undefined) {
+                    <span class="chip qty ltr">Qty {{ product.quantityOnHand }}</span>
+                  }
+                </div>
+                @if (product.vesselNames.length > 0) {
+                  <div class="vessels">
+                    @for (vessel of product.vesselNames; track vessel) {
+                      <span class="chip vessel">{{ vessel }}</span>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+
+            <div class="actions">
+              <button type="button" class="ghost" (click)="toggleDetails(product.id)">
+                {{ expandedId() === product.id ? 'Hide' : 'Details' }}
+              </button>
+              <button type="button" class="soft" (click)="edit(product.id)">Edit</button>
+              <button
+                type="button"
+                class="danger"
+                (click)="askDelete(product)"
+                [disabled]="!!deletingId()"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+
+          @if (expandedId() === product.id) {
+            <div class="details">
+              @if (detailsLoadingId() === product.id) {
+                <p class="muted">Loading details...</p>
+              } @else if (details()[product.id]; as detail) {
+                <div class="fields">
+                  <div class="field">
+                    <span class="label">Code</span>
+                    <strong class="value ltr">{{ detail.code || '—' }}</strong>
+                  </div>
+                  <div class="field">
+                    <span class="label">Category</span>
+                    <strong class="value">{{ detail.categoryName }}</strong>
+                  </div>
+                  <div class="field">
+                    <span class="label">Unit</span>
+                    <strong class="value ltr">{{ detail.defaultUnit }}</strong>
+                  </div>
+                  <div class="field">
+                    <span class="label">Active</span>
+                    <strong class="value" [class.on]="detail.isActive" [class.off]="!detail.isActive">
+                      {{ detail.isActive ? 'Yes' : 'No' }}
+                    </strong>
+                  </div>
+                </div>
+
+                @if (detail.description) {
+                  <div class="desc-box">
+                    <span class="label">Description</span>
+                    <p class="desc">{{ detail.description }}</p>
+                  </div>
+                }
+
+                <div class="stocks-block">
+                  <div class="stocks-head">
+                    <h3>Vessel Stocks</h3>
+                    <span class="muted">{{ detail.vesselStocks.length }}</span>
+                  </div>
+
+                  @if (detail.vesselStocks.length === 0) {
+                    <p class="muted">No linked vessels.</p>
+                  } @else {
+                    <ul class="stocks">
+                      @for (stock of detail.vesselStocks; track stock.vesselId) {
+                        <li>
+                          <strong>{{ stock.vesselName }}</strong>
+                          <span class="qty-badge ltr">{{ stock.quantityOnHand }}</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </div>
+              } @else {
+                <p class="muted">No details available.</p>
+              }
+            </div>
+          }
+        </article>
+      }
+    </div>
+  }
+
+  @if (pendingDelete(); as target) {
+    <div class="modal-backdrop" (click)="cancelDelete()" role="presentation"></div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+      <div class="modal-icon" aria-hidden="true">!</div>
+      <div class="modal-copy">
+        <h2 id="delete-title">Delete product?</h2>
+        <p>
+          You’re about to remove
+          <strong>{{ target.name }}</strong>
+          from the catalog. This can’t be undone.
+        </p>
+        @if (target.categoryName) {
+          <p class="modal-meta">Category: {{ target.categoryName }}</p>
+        }
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="ghost" (click)="cancelDelete()" [disabled]="!!deletingId()">
+          Cancel
+        </button>
+        <button type="button" class="danger solid" (click)="confirmDelete()" [disabled]="!!deletingId()">
+          {{ deletingId() === target.id ? 'Deleting...' : 'Delete product' }}
+        </button>
+      </div>
+    </div>
+  }
+</section>

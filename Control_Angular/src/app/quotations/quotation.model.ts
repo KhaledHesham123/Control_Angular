@@ -1,9 +1,3 @@
-export interface Result<T> {
-  succeeded: boolean;
-  messages: string[];
-  data: T | null;
-}
-
 export interface PaginationResponse<T> {
   count: number;
   data: T[];

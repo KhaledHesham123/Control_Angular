@@ -1,0 +1,170 @@
+<section class="board" dir="ltr" lang="en">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">Vessel Management</p>
+      <h1>Edit Vessel</h1>
+      <p class="lede">Update vessel details and link or unlink users.</p>
+    </div>
+    <button type="button" class="ghost" (click)="back()">Back to vessels</button>
+  </header>
+
+  @if (error()) {
+    <div class="banner error" role="alert">{{ error() }}</div>
+  }
+  @if (success()) {
+    <div class="banner ok" role="status">{{ success() }}</div>
+  }
+
+  @if (loading()) {
+    <div class="progress" role="progressbar" aria-label="Loading vessel"></div>
+  } @else if (vessel(); as current) {
+    <form class="panel" (ngSubmit)="submit()">
+      <div class="summary">
+        <div>
+          <h2>{{ current.name }}</h2>
+          <p class="muted">{{ current.users.length }} linked user(s)</p>
+        </div>
+      </div>
+
+      <div class="grid">
+        <label>
+          <span>Name</span>
+          <input name="name" type="text" [(ngModel)]="name" [disabled]="submitting()" required />
+        </label>
+        <label>
+          <span>IMO Number</span>
+          <input name="imoNumber" class="ltr" type="text" [(ngModel)]="imoNumber" [disabled]="submitting()" />
+        </label>
+        <label>
+          <span>Flag</span>
+          <input name="flag" type="text" [(ngModel)]="flag" [disabled]="submitting()" />
+        </label>
+      </div>
+
+      <label class="full">
+        <span>Notes</span>
+        <textarea name="notes" rows="3" [(ngModel)]="notes" [disabled]="submitting()"></textarea>
+      </label>
+
+      <label class="check">
+        <input name="isActive" type="checkbox" [(ngModel)]="isActive" [disabled]="submitting()" />
+        <span>Active</span>
+      </label>
+
+      <div class="actions">
+        <button type="submit" class="primary" [disabled]="submitting()">
+          {{ submitting() ? 'Saving...' : 'Save Changes' }}
+        </button>
+      </div>
+    </form>
+
+    <section class="panel users">
+      <header class="section-head">
+        <div>
+          <h2>User Linking</h2>
+            <p class="muted">Link or unlink users for this vessel.</p>
+        </div>
+        <button
+          type="button"
+          class="ghost"
+          (click)="loadUserLookups()"
+          [disabled]="loadingUsers() || linking() || unlinking()"
+        >
+          Refresh users
+        </button>
+      </header>
+
+      @if (loadingUsers()) {
+        <p class="muted">Loading user lists...</p>
+      } @else {
+        <div class="user-cols">
+          <div class="user-col">
+            <h3>Unlinked users</h3>
+            @if (availableUsers().length === 0) {
+              <p class="muted">No users available to link.</p>
+            } @else {
+              <ul class="checks">
+                @for (user of availableUsers(); track user.id) {
+                  <li>
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        [checked]="isLinkSelected(user.id)"
+                        (change)="toggleLinkUser(user.id)"
+                        [disabled]="linking()"
+                      />
+                      @if (imageUrl(user.imagePath); as src) {
+                        <img class="user-avatar" [src]="src" [alt]="user.name" />
+                      } @else {
+                        <span class="user-avatar fallback" aria-hidden="true">{{ user.name.slice(0, 1) }}</span>
+                      }
+                      <span>
+                        <strong>{{ user.name }}</strong>
+                        <small class="ltr">{{ user.email }}</small>
+                      </span>
+                    </label>
+                  </li>
+                }
+              </ul>
+            }
+
+            <button
+              type="button"
+              class="primary"
+              (click)="linkUsers()"
+              [disabled]="linking() || selectedLinkUserIds.length === 0"
+            >
+              {{ linking() ? 'Linking...' : 'Link Users' }}
+            </button>
+          </div>
+
+          <div class="user-col">
+            <h3>Linked users</h3>
+            @if (linkedUsers().length === 0) {
+              <p class="muted">No linked users.</p>
+            } @else {
+              <ul class="checks">
+                @for (user of linkedUsers(); track user.id) {
+                  <li>
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        [checked]="isUnlinkSelected(user.id)"
+                        (change)="toggleUnlinkUser(user.id)"
+                        [disabled]="unlinking()"
+                      />
+                      @if (imageUrl(user.imagePath); as src) {
+                        <img class="user-avatar" [src]="src" [alt]="user.name" />
+                      } @else {
+                        <span class="user-avatar fallback" aria-hidden="true">{{ user.name.slice(0, 1) }}</span>
+                      }
+                      <span>
+                        <strong>{{ user.name }}</strong>
+                        <small class="ltr">{{ user.email }}</small>
+                      </span>
+                    </label>
+                  </li>
+                }
+              </ul>
+            }
+
+            <button
+              type="button"
+              class="danger"
+              (click)="unlinkUsers()"
+              [disabled]="unlinking() || selectedUnlinkUserIds.length === 0"
+            >
+              {{ unlinking() ? 'Unlinking...' : 'Unlink Users' }}
+            </button>
+          </div>
+        </div>
+      }
+    </section>
+  } @else {
+    <div class="empty panel">
+      <h2>Vessel unavailable</h2>
+      <p class="muted">Check the id or go back to the vessels list.</p>
+      <button type="button" class="primary" (click)="back()">Back</button>
+    </div>
+  }
+</section>

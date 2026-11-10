@@ -1,5 +1,6 @@
 import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Title } from '@angular/platform-browser';
 import { QuotationListItem } from './quotation.model';
 import { QuotationService } from './quotation.service';
 
@@ -12,6 +13,7 @@ import { QuotationService } from './quotation.service';
 export class Quotations implements OnInit {
   private readonly quotationService = inject(QuotationService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly title = inject(Title);
   private requestId = 0;
 
   readonly pageSizes = [5, 10, 20, 50];
@@ -27,6 +29,7 @@ export class Quotations implements OnInit {
   pageSize = 10;
 
   ngOnInit(): void {
+    this.title.setTitle('عروض الأسعار | Ships Control');
     this.load();
   }
 

@@ -1,0 +1,65 @@
+<section class="login-page" dir="rtl" lang="ar">
+  <div class="card">
+    <header>
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="34" height="34">
+          <circle cx="24" cy="24" r="22" fill="none" stroke="currentColor" stroke-width="2" />
+          <path d="M24 8v32M10 28h28M14 28c2 7 6 10 10 10s8-3 10-10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          <circle cx="24" cy="16" r="3" fill="currentColor" />
+        </svg>
+      </span>
+      <div>
+        <p class="eyebrow">Ships Control</p>
+        <h1>Login</h1>
+      </div>
+    </header>
+
+    <p class="lede">سجّل الدخول للوصول إلى Control Center.</p>
+
+    @if (error()) {
+      <div class="banner" role="alert">{{ error() }}</div>
+    }
+
+    <form (ngSubmit)="submit()">
+      <label>
+        <span>Email</span>
+        <input
+          class="ltr"
+          name="email"
+          type="email"
+          autocomplete="username"
+          [(ngModel)]="email"
+          [disabled]="loading()"
+          required
+        />
+      </label>
+
+      <label>
+        <span>Password</span>
+        <input
+          class="ltr"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          [(ngModel)]="password"
+          [disabled]="loading()"
+          required
+        />
+      </label>
+
+      <label class="remember">
+        <input
+          name="rememberMe"
+          type="checkbox"
+          [(ngModel)]="rememberMe"
+          [disabled]="loading()"
+        />
+        <span>Remember Me</span>
+      </label>
+
+      <button type="submit" [disabled]="loading()">
+        {{ loading() ? 'جاري الدخول...' : 'Login' }}
+      </button>
+    </form>
+  </div>
+</section>

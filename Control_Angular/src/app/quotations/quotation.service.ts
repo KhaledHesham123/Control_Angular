@@ -1,14 +1,15 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { API_BASE_URL } from '../core/api.config';
+import { Result } from '../core/api.model';
 import {
   PaginationResponse,
   QuotationListItem,
   QuotationQuery,
-  Result,
 } from './quotation.model';
 
-const QUOTATIONS_URL = 'https://shipscontrol.runasp.net/api/Quotations/GetAll';
+const QUOTATIONS_URL = `${API_BASE_URL}/Quotations/GetAll`;
 
 @Injectable({ providedIn: 'root' })
 export class QuotationService {

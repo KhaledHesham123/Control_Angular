@@ -1,0 +1,153 @@
+<section class="board" dir="ltr" lang="en">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">Product Management</p>
+      <h1>Create Product</h1>
+      <p class="lede">Add a general product for all vessels, or link it to selected vessels with quantity and image.</p>
+    </div>
+  </header>
+
+  @if (error()) {
+    <div class="banner error" role="alert">
+      <p>{{ error() }}</p>
+      <button type="button" (click)="loadLookups()">Retry</button>
+    </div>
+  }
+
+  @if (success()) {
+    <div class="banner ok" role="status">
+      <p>{{ success() }}</p>
+    </div>
+  }
+
+  <form class="panel" (ngSubmit)="submit()">
+    <div class="grid">
+      <label>
+        <span>Scope</span>
+        <select
+          name="scope"
+          [ngModel]="scope"
+          (ngModelChange)="onScopeChange($event)"
+          [disabled]="submitting()"
+        >
+          <option [ngValue]="ProductScope.General">General — all vessels</option>
+          <option [ngValue]="ProductScope.VesselSpecific">VesselSpecific — selected vessels</option>
+        </select>
+      </label>
+
+      <app-category-lookup
+        label="Category"
+        [(categoryId)]="categoryId"
+        [disabled]="submitting()"
+        [required]="true"
+        (failed)="onCategoryFailed($event)"
+      />
+
+      <label>
+        <span>Name</span>
+        <input name="name" type="text" [(ngModel)]="name" [disabled]="submitting()" required />
+      </label>
+
+      <label>
+        <span>Code</span>
+        <input name="code" class="ltr" type="text" [(ngModel)]="code" [disabled]="submitting()" />
+      </label>
+
+      <label>
+        <span>Default Unit</span>
+        <input
+          name="defaultUnit"
+          class="ltr"
+          type="text"
+          [(ngModel)]="defaultUnit"
+          placeholder="Pcs / Kg / Set"
+          [disabled]="submitting()"
+          required
+        />
+      </label>
+
+      <label>
+        <span>Quantity On Hand</span>
+        <input
+          name="quantityOnHand"
+          class="ltr"
+          type="number"
+          min="0"
+          step="0.01"
+          [(ngModel)]="quantityOnHand"
+          [disabled]="submitting()"
+        />
+      </label>
+    </div>
+
+    <label class="full">
+      <span>Description</span>
+      <textarea
+        name="description"
+        rows="3"
+        [(ngModel)]="description"
+        [disabled]="submitting()"
+      ></textarea>
+    </label>
+
+    <div class="image-box">
+      <label class="full">
+        <span>Image</span>
+        <input
+          #imageInput
+          name="image"
+          type="file"
+          accept="image/*"
+          (change)="onImageSelected($event)"
+          [disabled]="submitting()"
+        />
+      </label>
+      @if (imagePreview) {
+        <div class="preview">
+          <img [src]="imagePreview" alt="Product image preview" />
+          <button type="button" class="ghost" (click)="clearImage(imageInput)" [disabled]="submitting()">
+            Remove image
+          </button>
+        </div>
+      }
+    </div>
+
+    @if (scope === ProductScope.VesselSpecific) {
+      <section class="vessels">
+        <div class="vessels-head">
+          <div>
+            <h2>Vessels</h2>
+            <p>Select vessels to link with this product on create.</p>
+          </div>
+          <strong>{{ selectedVesselIds.length }} selected</strong>
+        </div>
+
+        @if (loadingLookups()) {
+          <div class="progress" role="progressbar" aria-label="Loading vessels"></div>
+        } @else if (vessels().length === 0) {
+          <p class="muted">No vessels available.</p>
+        } @else {
+          <div class="vessel-grid">
+            @for (vessel of vessels(); track vessel.id) {
+              <label class="vessel-chip" [class.checked]="isVesselSelected(vessel.id)">
+                <input
+                  type="checkbox"
+                  [checked]="isVesselSelected(vessel.id)"
+                  (change)="toggleVessel(vessel.id)"
+                  [disabled]="submitting()"
+                />
+                <span>{{ vessel.name }}</span>
+              </label>
+            }
+          </div>
+        }
+      </section>
+    }
+
+    <div class="actions">
+      <button type="submit" [disabled]="submitting() || loadingLookups()">
+        {{ submitting() ? 'Saving...' : 'Create Product' }}
+      </button>
+    </div>
+  </form>
+</section>
