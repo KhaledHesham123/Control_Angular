@@ -1,0 +1,127 @@
+<section class="board" dir="ltr" lang="en">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">RFQ</p>
+      <h1>RFQ Requests</h1>
+    </div>
+    <div class="mast-actions">
+      <button type="button" class="mast-btn" (click)="loadRequests()" [disabled]="loading()">Refresh</button>
+      <button type="button" class="mast-btn primary" (click)="create()">Create RFQ</button>
+    </div>
+  </header>
+
+  <div class="toolbar panel">
+    <label>
+      <span>Status</span>
+      <select
+        [ngModel]="statusFilter"
+        (ngModelChange)="onStatusChange($event)"
+        [disabled]="loading()"
+      >
+        <option [ngValue]="''">All statuses</option>
+        @for (status of statusOptions; track status) {
+          <option [ngValue]="status">{{ statusLabel(status) }}</option>
+        }
+      </select>
+    </label>
+
+    <app-category-lookup
+      label="Category"
+      placeholder="All categories"
+      [categoryId]="categoryId"
+      [disabled]="loading()"
+      (categoryIdChange)="onCategoryChange($event)"
+      (failed)="onCategoryFailed($event)"
+    />
+
+    <label>
+      <span>Vessel</span>
+      <select
+        [ngModel]="vesselId"
+        (ngModelChange)="onVesselChange($event)"
+        [disabled]="loading() || loadingVessels()"
+      >
+        <option value="">All vessels</option>
+        @for (vessel of vessels(); track vessel.id) {
+          <option [value]="vessel.id">{{ vessel.name }}</option>
+        }
+      </select>
+    </label>
+  </div>
+
+  @if (error()) {
+    <div class="banner error" role="alert">
+      <p>{{ error() }}</p>
+      <button type="button" (click)="loadRequests()">Retry</button>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="progress" role="progressbar" aria-label="Loading RFQ requests"></div>
+  } @else if (items().length === 0) {
+    <div class="empty panel">
+      <h2>No RFQ requests</h2>
+      <p>Create an RFQ to see it listed here.</p>
+    </div>
+  } @else {
+    <div class="list">
+      @for (item of items(); track item.id) {
+        <article class="item-card panel">
+          <div class="row">
+            <div class="meta">
+              <h2>{{ item.title }}</h2>
+              <div class="chips">
+                <span class="chip">{{ categoryNames(item.categories) }}</span>
+                <span class="chip vessel">{{ item.vesselName }}</span>
+                <span class="chip qty">{{ statusLabel(item.status) }}</span>
+              </div>
+            </div>
+
+            <div class="stats">
+              <div class="stat">
+                <span class="label">Items</span>
+                <strong>{{ item.itemsCount }}</strong>
+              </div>
+              <div class="stat">
+                <span class="label">Emails</span>
+                <strong>{{ item.supplierEmailsCount }}</strong>
+              </div>
+              @if (isReadyToSend(item.status)) {
+                <button type="button" class="soft" (click)="openEmail(item.id)">Send email</button>
+              } @else {
+                <button type="button" class="soft" (click)="confirm(item.id)">Confirm</button>
+              }
+            </div>
+          </div>
+
+          @if (isDraft(item.status)) {
+            <div class="draft-timer" aria-live="polite">
+              <div class="draft-timer-head">
+                <span class="draft-timer-badge">Draft</span>
+              </div>
+              <div class="draft-timer-units ltr">
+                @for (part of draftAgeParts(item.createdAt); track part.unit) {
+                  <div class="draft-timer-unit">
+                    <strong>{{ part.value }}</strong>
+                    <span>{{ part.unit }}</span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
+          @if (item.notes || item.subject) {
+            <div class="details">
+              @if (item.subject) {
+                <p><span class="label">Subject</span> {{ item.subject }}</p>
+              }
+              @if (item.notes) {
+                <p class="desc">{{ item.notes }}</p>
+              }
+            </div>
+          }
+        </article>
+      }
+    </div>
+  }
+</section>

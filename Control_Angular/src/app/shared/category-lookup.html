@@ -1,3 +1,63 @@
+@if (tree) {
+  <div class="lookup">
+    <span>{{ label }}</span>
+    @if (loading()) {
+      <small>Loading categories...</small>
+    } @else if (categories().length === 0) {
+      <small>No categories</small>
+    } @else {
+      <div class="check-tree">
+        <ng-template #branch let-category>
+          @if (hasChildren(category)) {
+            <div class="tree-parent">
+              <button type="button" class="arrow" (click)="toggleOpen(category.id)" [disabled]="disabled">
+                {{ isOpen(category.id) ? '▾' : '▸' }}
+              </button>
+              <span class="node-name">{{ category.name }}</span>
+              <span class="count">({{ childCount(category) }})</span>
+              <label class="all">
+                <input
+                  type="checkbox"
+                  [checked]="allChecked(category)"
+                  [indeterminate]="partial(category)"
+                  [disabled]="disabled"
+                  (change)="toggleAll(category, $any($event.target).checked)"
+                />
+                الكل
+              </label>
+            </div>
+            @if (isOpen(category.id)) {
+              <div class="tree-children">
+                @for (child of childCategories(category.id); track child.id) {
+                  <ng-container *ngTemplateOutlet="branch; context: { $implicit: child }" />
+                }
+              </div>
+            }
+          } @else {
+            <label class="tree-leaf">
+              <input
+                type="checkbox"
+                [checked]="isChecked(category.id)"
+                [disabled]="disabled"
+                (change)="onLeafCheck(category, $any($event.target).checked)"
+              />
+              <span>{{ category.name }}</span>
+            </label>
+          }
+        </ng-template>
+
+        @for (root of roots(); track root.id) {
+          <section class="tree-block">
+            <ng-container *ngTemplateOutlet="branch; context: { $implicit: root }" />
+          </section>
+        }
+      </div>
+    }
+    @if (error()) {
+      <small class="error">{{ error() }}</small>
+    }
+  </div>
+} @else {
 <label class="lookup">
   <span>{{ label }}</span>
   <select
@@ -11,7 +71,7 @@
     </option>
     @for (category of categories(); track category.id) {
       <option [value]="category.id" [selected]="selectedId === category.id">
-        {{ category.name }}
+        {{ category.parentName ? category.parentName + ' / ' + category.name : category.name }}
       </option>
     }
   </select>
@@ -19,3 +79,4 @@
     <small class="error">{{ error() }}</small>
   }
 </label>
+}

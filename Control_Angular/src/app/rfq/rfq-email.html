@@ -1,0 +1,128 @@
+<section class="board" dir="ltr" lang="en">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">RFQ</p>
+      <h1>Send email</h1>
+      <p class="lede">Each supplier has a subject and body. Generate email will fill them later.</p>
+    </div>
+    <div class="mast-actions">
+      <button type="button" class="ghost" (click)="back()">Back to list</button>
+      <button
+        type="button"
+        class="generate"
+        (click)="generateEmail()"
+        [disabled]="generating()"
+      >
+        {{ generating() ? 'Generating...' : 'Generate email' }}
+      </button>
+      <button
+        type="button"
+        class="pdf"
+        (click)="generatePdf()"
+        [disabled]="generatingPdf()"
+      >
+        {{ generatingPdf() ? 'Generating PDF...' : 'Generate PDF' }}
+      </button>
+      <button
+        type="button"
+        class="send"
+        (click)="sendEmails()"
+        [disabled]="sending()"
+      >
+        {{ sending() ? 'Sending...' : 'Send' }}
+      </button>
+    </div>
+  </header>
+
+  @if (error()) {
+    <div class="banner error" role="alert">{{ error() }}</div>
+  }
+  @if (notice()) {
+    <div class="banner ok" role="status">{{ notice() }}</div>
+  }
+
+  @if (loading()) {
+    <div class="progress" role="progressbar" aria-label="Loading RFQ email"></div>
+  } @else if (detail(); as current) {
+    <section class="panel">
+      <div class="summary">
+        <div>
+          <h2>{{ current.title || 'Untitled RFQ' }}</h2>
+          <p class="muted">{{ current.vesselName }} · {{ categoryNames(current.categories) }}</p>
+        </div>
+        <span class="chip">{{ suppliers().length }} suppliers</span>
+      </div>
+      @if (pdfUrl(); as url) {
+        <a class="pdf-link ltr" [href]="url" target="_blank" rel="noopener">Open provision PDF</a>
+      }
+      @if (current.notes) {
+        <p class="notes">{{ current.notes }}</p>
+      }
+    </section>
+
+    <section class="panel">
+      <div class="items-head">
+        <h3>Suppliers</h3>
+      </div>
+
+      @if (suppliers().length === 0) {
+        <p class="muted">No suppliers on this view.</p>
+      } @else {
+        <div class="email-grid">
+          @for (supplier of suppliers(); track supplier.id) {
+            <article class="email-card">
+              <header>
+                <div>
+                  <h4>{{ supplier.supplierName || supplier.primaryEmail || 'Supplier' }}</h4>
+                  @if (supplier.supplierName) {
+                    <p class="muted ltr">{{ supplier.primaryEmail || 'No primary email' }}</p>
+                  }
+                  <p class="muted ltr">
+                    @if (supplier.alternateEmail) {
+                      Alt {{ supplier.alternateEmail }}
+                    }
+                    @if (supplier.alternateEmail && supplier.phone) {
+                      ·
+                    }
+                    @if (supplier.phone) {
+                      {{ supplier.phone }}
+                    }
+                  </p>
+                </div>
+                <button type="button" class="ghost" (click)="hideSupplier(supplier.id)">Remove</button>
+              </header>
+              @if (sendResultFor(supplier.id); as sent) {
+                <p class="send-state" [class.bad]="!sent.succeeded">
+                  {{ statusLabel(sent.status) }}
+                  @if (sent.errorMessage) {
+                    · {{ sent.errorMessage }}
+                  }
+                </p>
+              }
+              <label>
+                <span>Subject</span>
+                <input
+                  class="ltr"
+                  type="text"
+                  [(ngModel)]="supplier.subject"
+                  [name]="'subject-' + supplier.id"
+                  placeholder="Subject"
+                />
+              </label>
+              <label>
+                <span>Body</span>
+                <textarea
+                  class="ltr"
+                  rows="8"
+                  [(ngModel)]="supplier.body"
+                  [name]="'body-' + supplier.id"
+                  placeholder="Body"
+                ></textarea>
+              </label>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  }
+</section>

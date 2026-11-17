@@ -5,7 +5,13 @@ import { Title } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { resolveFileUrl } from '../core/api.config';
-import { ProductDto, ProductScope, VesselDto } from './product.model';
+import {
+  ProductDto,
+  ProductScope,
+  SHELF_LIFE_UNIT_LABELS,
+  ShelfLifeUnit,
+  VesselDto,
+} from './product.model';
 import { ProductService } from './product.service';
 import { VesselService } from './vessel.service';
 
@@ -24,6 +30,10 @@ export class EditProduct implements OnInit {
   private readonly router = inject(Router);
 
   readonly ProductScope = ProductScope;
+  readonly shelfLifeUnitLabels = SHELF_LIFE_UNIT_LABELS;
+  readonly shelfLifeUnitOptions = Object.values(ShelfLifeUnit).filter(
+    (value): value is ShelfLifeUnit => typeof value === 'number',
+  );
 
   readonly loading = signal(false);
   readonly loadingVessels = signal(false);
@@ -42,6 +52,8 @@ export class EditProduct implements OnInit {
   code = '';
   defaultUnit = '';
   description = '';
+  shelfLifeValue: number | null = null;
+  shelfLifeUnit: ShelfLifeUnit | null = null;
   scope: ProductScope = ProductScope.General;
   isActive = true;
   image: File | null = null;
@@ -234,6 +246,12 @@ export class EditProduct implements OnInit {
       return;
     }
 
+    const shelfLifeError = this.validateShelfLife();
+    if (shelfLifeError) {
+      this.error.set(shelfLifeError);
+      return;
+    }
+
     this.submitting.set(true);
 
     this.productService
@@ -243,6 +261,8 @@ export class EditProduct implements OnInit {
         code: this.code,
         defaultUnit: this.defaultUnit,
         description: this.description,
+        shelfLifeValue: this.normalizedShelfLifeValue(),
+        shelfLifeUnit: this.normalizedShelfLifeUnit(),
         scope: this.scope,
         isActive: this.isActive,
         image: this.image,
@@ -361,6 +381,9 @@ export class EditProduct implements OnInit {
     this.code = product.code ?? '';
     this.defaultUnit = product.defaultUnit;
     this.description = product.description ?? '';
+    this.shelfLifeValue = product.shelfLifeValue ?? null;
+    this.shelfLifeUnit =
+      product.shelfLifeUnit == null ? null : (Number(product.shelfLifeUnit) as ShelfLifeUnit);
     this.scope =
       product.scope ??
       (product.vesselStocks.length > 0 ? ProductScope.VesselSpecific : ProductScope.General);
@@ -372,6 +395,43 @@ export class EditProduct implements OnInit {
       this.selectedUnlinkVesselIds = [];
       this.linkQuantityOnHand = 0;
     }
+  }
+
+  private validateShelfLife(): string | null {
+    const value = this.normalizedShelfLifeValue();
+    const unit = this.normalizedShelfLifeUnit();
+
+    if (this.shelfLifeValue != null && Number(this.shelfLifeValue) <= 0) {
+      return 'Shelf life value must be greater than 0.';
+    }
+
+    if (value != null && unit == null) {
+      return 'Select a shelf life unit.';
+    }
+
+    if (unit != null && value == null) {
+      return 'Enter a shelf life value.';
+    }
+
+    return null;
+  }
+
+  private normalizedShelfLifeValue(): number | null {
+    if (this.shelfLifeValue == null) {
+      return null;
+    }
+    const value = Number(this.shelfLifeValue);
+    if (!Number.isFinite(value) || value <= 0) {
+      return null;
+    }
+    return Math.trunc(value);
+  }
+
+  private normalizedShelfLifeUnit(): ShelfLifeUnit | null {
+    if (this.shelfLifeUnit == null) {
+      return null;
+    }
+    return Number(this.shelfLifeUnit) as ShelfLifeUnit;
   }
 
   private readError(err: HttpErrorResponse, fallback: string): string {

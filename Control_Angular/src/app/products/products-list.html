@@ -62,7 +62,7 @@
               <div class="meta">
                 <h2>{{ product.name }}</h2>
                 <div class="chips">
-                  <span class="chip">{{ product.categoryName }}</span>
+                  <span class="chip">{{ product.categoryName || 'Uncategorized' }}</span>
                   @if (product.quantityOnHand !== null && product.quantityOnHand !== undefined) {
                     <span class="chip qty ltr">Qty {{ product.quantityOnHand }}</span>
                   }

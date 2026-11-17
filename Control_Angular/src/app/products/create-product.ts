@@ -3,7 +3,12 @@ import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Title } from '@angular/platform-browser';
 import { ProductService } from './product.service';
-import { ProductScope, VesselDto } from './product.model';
+import {
+  ProductScope,
+  SHELF_LIFE_UNIT_LABELS,
+  ShelfLifeUnit,
+  VesselDto,
+} from './product.model';
 import { VesselService } from './vessel.service';
 
 @Component({
@@ -19,6 +24,10 @@ export class CreateProduct implements OnInit {
   private readonly title = inject(Title);
 
   readonly ProductScope = ProductScope;
+  readonly shelfLifeUnitLabels = SHELF_LIFE_UNIT_LABELS;
+  readonly shelfLifeUnitOptions = Object.values(ShelfLifeUnit).filter(
+    (value): value is ShelfLifeUnit => typeof value === 'number',
+  );
 
   readonly loadingLookups = signal(false);
   readonly submitting = signal(false);
@@ -32,6 +41,8 @@ export class CreateProduct implements OnInit {
   code = '';
   defaultUnit = '';
   description = '';
+  shelfLifeValue: number | null = null;
+  shelfLifeUnit: ShelfLifeUnit | null = null;
   quantityOnHand = 0;
   selectedVesselIds: string[] = [];
   image: File | null = null;
@@ -141,6 +152,12 @@ export class CreateProduct implements OnInit {
       return;
     }
 
+    const shelfLifeError = this.validateShelfLife();
+    if (shelfLifeError) {
+      this.error.set(shelfLifeError);
+      return;
+    }
+
     if (this.scope === ProductScope.VesselSpecific && this.selectedVesselIds.length === 0) {
       this.error.set('Select at least one vessel when Scope is VesselSpecific.');
       return;
@@ -157,6 +174,8 @@ export class CreateProduct implements OnInit {
         code: this.code,
         defaultUnit: this.defaultUnit,
         description: this.description,
+        shelfLifeValue: this.normalizedShelfLifeValue(),
+        shelfLifeUnit: this.normalizedShelfLifeUnit(),
         quantityOnHand: this.quantityOnHand,
         image: this.image,
       })
@@ -186,9 +205,48 @@ export class CreateProduct implements OnInit {
     this.code = '';
     this.defaultUnit = '';
     this.description = '';
+    this.shelfLifeValue = null;
+    this.shelfLifeUnit = null;
     this.quantityOnHand = 0;
     this.selectedVesselIds = [];
     this.clearImage();
+  }
+
+  private validateShelfLife(): string | null {
+    const value = this.normalizedShelfLifeValue();
+    const unit = this.normalizedShelfLifeUnit();
+
+    if (this.shelfLifeValue != null && Number(this.shelfLifeValue) <= 0) {
+      return 'Shelf life value must be greater than 0.';
+    }
+
+    if (value != null && unit == null) {
+      return 'Select a shelf life unit.';
+    }
+
+    if (unit != null && value == null) {
+      return 'Enter a shelf life value.';
+    }
+
+    return null;
+  }
+
+  private normalizedShelfLifeValue(): number | null {
+    if (this.shelfLifeValue == null) {
+      return null;
+    }
+    const value = Number(this.shelfLifeValue);
+    if (!Number.isFinite(value) || value <= 0) {
+      return null;
+    }
+    return Math.trunc(value);
+  }
+
+  private normalizedShelfLifeUnit(): ShelfLifeUnit | null {
+    if (this.shelfLifeUnit == null) {
+      return null;
+    }
+    return Number(this.shelfLifeUnit) as ShelfLifeUnit;
   }
 
   private readError(err: HttpErrorResponse, fallback: string): string {

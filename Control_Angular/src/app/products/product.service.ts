@@ -59,6 +59,8 @@ export class ProductService {
       form.append('Description', value.description.trim());
     }
 
+    this.appendShelfLife(form, value.shelfLifeValue, value.shelfLifeUnit);
+
     if (value.scope === ProductScope.VesselSpecific) {
       for (const vesselId of value.vesselIds) {
         form.append('VesselIds', vesselId);
@@ -88,11 +90,26 @@ export class ProductService {
       form.append('Description', value.description.trim());
     }
 
+    this.appendShelfLife(form, value.shelfLifeValue, value.shelfLifeUnit);
+
     if (value.image) {
       form.append('Image', value.image, value.image.name);
     }
 
     return this.http.put<Result<boolean>>(`${this.baseUrl}/Update`, form);
+  }
+
+  private appendShelfLife(
+    form: FormData,
+    value: number | null | undefined,
+    unit: number | null | undefined,
+  ): void {
+    if (value != null && value > 0) {
+      form.append('ShelfLifeValue', String(value));
+    }
+    if (unit != null) {
+      form.append('ShelfLifeUnit', String(unit));
+    }
   }
 
   delete(id: string): Observable<Result<boolean>> {

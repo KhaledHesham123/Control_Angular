@@ -1,0 +1,97 @@
+<section class="board" dir="ltr" lang="en">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">Category Management</p>
+      <h1>Create Category</h1>
+      <p class="lede">Add a category and optionally link products.</p>
+    </div>
+    <button type="button" class="ghost" (click)="back()">Back to categories</button>
+  </header>
+
+  @if (error()) {
+    <div class="banner error" role="alert">
+      <p>{{ error() }}</p>
+      <button type="button" (click)="loadProducts()">Retry</button>
+    </div>
+  }
+
+  @if (success()) {
+    <div class="banner ok" role="status">{{ success() }}</div>
+  }
+
+  <form class="panel" (ngSubmit)="submit()">
+    <label class="full">
+      <span>Name</span>
+      <input name="name" type="text" [(ngModel)]="name" [disabled]="submitting()" required />
+    </label>
+
+    <div class="parent-picker">
+      <span>Parent category</span>
+      @if (parentPathLabel()) {
+        <p class="parent-current">{{ parentPathLabel() }}</p>
+      }
+      <div class="parent-levels">
+        @for (level of parentLevels(); track level.key; let i = $index) {
+          @if (i > 0) {
+            <span class="parent-sep">/</span>
+          }
+          <select
+            [name]="'parentLevel' + i"
+            [ngModel]="level.selectedId"
+            (ngModelChange)="onParentLevelChange(i, $event)"
+            [disabled]="submitting()"
+          >
+            <option value="">None</option>
+            @for (parent of level.options; track parent.id) {
+              <option [value]="parent.id">{{ parent.name }}</option>
+            }
+          </select>
+        }
+      </div>
+    </div>
+
+    <label class="full">
+      <span>Description</span>
+      <textarea name="description" rows="3" [(ngModel)]="description" [disabled]="submitting()"></textarea>
+    </label>
+
+    <section class="users">
+      <div class="users-head">
+        <div>
+          <h2>Products</h2>
+          <p class="muted">Optional products to attach on create.</p>
+        </div>
+        <strong>{{ selectedProductIds.length }} selected</strong>
+      </div>
+
+      @if (loadingProducts()) {
+        <div class="progress" role="progressbar" aria-label="Loading products"></div>
+      } @else if (products().length === 0) {
+        <p class="muted">No products available.</p>
+      } @else {
+        <div class="user-grid">
+          @for (product of products(); track product.id) {
+            <label class="user-chip" [class.checked]="isProductSelected(product.id)">
+              <input
+                type="checkbox"
+                [checked]="isProductSelected(product.id)"
+                (change)="toggleProduct(product.id)"
+                [disabled]="submitting()"
+              />
+              <span>
+                <strong>{{ product.name }}</strong>
+                <small>{{ product.categoryName }}</small>
+              </span>
+            </label>
+          }
+        </div>
+      }
+    </section>
+
+    <div class="actions">
+      <button type="submit" class="primary" [disabled]="submitting() || loadingProducts()">
+        {{ submitting() ? 'Saving...' : 'Create Category' }}
+      </button>
+    </div>
+  </form>
+</section>

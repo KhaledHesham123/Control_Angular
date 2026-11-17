@@ -25,6 +25,11 @@ export class ControlHome implements OnInit {
       route: '/products',
     },
     {
+      title: 'Category Management',
+      description: 'View categories, create, edit, delete, and link products/suppliers.',
+      route: '/categories',
+    },
+    {
       title: 'Vessel Management',
       description: 'View vessels, details, create, edit, delete, and link users.',
       route: '/vessels',

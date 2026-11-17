@@ -1,0 +1,208 @@
+<section class="board" dir="ltr" lang="en">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">Control Center</p>
+      <h1>Category Management</h1>
+    </div>
+    <div class="mast-actions">
+      <button type="button" class="mast-btn" (click)="back()">Back</button>
+      <button type="button" class="mast-btn" (click)="loadCategories()" [disabled]="loading()">Refresh</button>
+      <button type="button" class="mast-btn primary" (click)="create()">Create Category</button>
+    </div>
+  </header>
+
+  <div class="toolbar panel">
+    <label class="check">
+      <input
+        type="checkbox"
+        [checked]="includeInactive"
+        (change)="onIncludeInactiveChange(($any($event.target)).checked)"
+        [disabled]="loading()"
+      />
+      <span>Include inactive</span>
+    </label>
+  </div>
+
+  @if (error()) {
+    <div class="banner error" role="alert">
+      <p>{{ error() }}</p>
+      <button type="button" (click)="loadCategories()">Retry</button>
+    </div>
+  }
+
+  @if (success() && !error()) {
+    <div class="banner ok" role="status">
+      <div>
+        <strong>Done</strong>
+        <p>{{ success() }}</p>
+      </div>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="progress" role="progressbar" aria-label="Loading categories"></div>
+  } @else if (categories().length === 0) {
+    <div class="empty panel">
+      <h2>No categories</h2>
+      <p>Categories from the API will appear here.</p>
+    </div>
+  } @else {
+    <div class="list">
+      @for (row of categoryRows(); track row.category.id) {
+        <article
+          class="item-card panel"
+          [class.open]="expandedId() === row.category.id"
+          [class.child]="row.depth > 0"
+          [style.margin-inline-start.px]="row.depth * 28"
+        >
+          <div class="row">
+            <div class="identity">
+              <div class="avatar" aria-hidden="true">{{ row.category.name.slice(0, 1) }}</div>
+              <div class="meta">
+                @if (hasChildren(row.category)) {
+                  <button type="button" class="open-level" (click)="toggleChildren(row.category)">
+                    {{ row.category.name }}
+                  </button>
+                } @else {
+                  <h2>{{ row.category.name }}</h2>
+                }
+                <div class="chips">
+                  <span class="chip" [class.on]="row.category.isActive" [class.off]="!row.category.isActive">
+                    {{ row.category.isActive ? 'Active' : 'Inactive' }}
+                  </span>
+                  @if (hasChildren(row.category)) {
+                    <span class="chip">{{ isOpen(row.category.id) ? 'Hide children' : 'Show children' }}</span>
+                  }
+                </div>
+              </div>
+            </div>
+
+            <div class="actions">
+              @if (hasChildren(row.category)) {
+                <button type="button" class="soft" (click)="toggleChildren(row.category)">
+                  {{ isOpen(row.category.id) ? 'Hide' : 'Open' }}
+                </button>
+              }
+              <button type="button" class="ghost" (click)="toggleDetails(row.category.id)">
+                {{ expandedId() === row.category.id ? 'Hide' : 'Details' }}
+              </button>
+              <button type="button" class="soft" (click)="edit(row.category.id)">Edit</button>
+              <button
+                type="button"
+                class="danger"
+                (click)="askDelete(row.category)"
+                [disabled]="!!deletingId()"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+
+          @if (expandedId() === row.category.id) {
+            <div class="details">
+              @if (detailsLoadingId() === row.category.id) {
+                <p class="muted">Loading details...</p>
+              } @else {
+                <div class="fields">
+                  <div class="field">
+                    <span class="label">Name</span>
+                    <strong class="value">{{ row.category.name }}</strong>
+                  </div>
+                  <div class="field">
+                    <span class="label">Active</span>
+                    <strong class="value" [class.on]="row.category.isActive" [class.off]="!row.category.isActive">
+                      {{ row.category.isActive ? 'Yes' : 'No' }}
+                    </strong>
+                  </div>
+                  <div class="field">
+                    <span class="label">Products</span>
+                    <strong class="value">{{ (linkedProducts()[row.category.id] ?? []).length }}</strong>
+                  </div>
+                  <div class="field">
+                    <span class="label">Suppliers</span>
+                    <strong class="value">{{ (linkedSuppliers()[row.category.id] ?? []).length }}</strong>
+                  </div>
+                </div>
+
+                <div class="desc-box">
+                  <span class="label">Description</span>
+                  <p class="desc">{{ row.category.description || 'No description.' }}</p>
+                </div>
+
+                <div class="stocks-block">
+                  <div class="stocks-head">
+                    <h3>Linked Products</h3>
+                    <span class="muted">{{ (linkedProducts()[row.category.id] ?? []).length }}</span>
+                  </div>
+                  @if ((linkedProducts()[row.category.id] ?? []).length === 0) {
+                    <p class="muted">No linked products.</p>
+                  } @else {
+                    <ul class="stocks">
+                      @for (product of linkedProducts()[row.category.id]; track product.id) {
+                        <li>
+                          <div class="stock-identity">
+                            @if (imageUrl(product.imagePath); as src) {
+                              <img class="thumb" [src]="src" [alt]="product.name" />
+                            }
+                            <div>
+                              <strong>{{ product.name }}</strong>
+                              <p class="muted ltr">{{ product.code || 'No code' }}</p>
+                            </div>
+                          </div>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </div>
+
+                <div class="stocks-block">
+                  <div class="stocks-head">
+                    <h3>Linked Suppliers</h3>
+                    <span class="muted">{{ (linkedSuppliers()[row.category.id] ?? []).length }}</span>
+                  </div>
+                  @if ((linkedSuppliers()[row.category.id] ?? []).length === 0) {
+                    <p class="muted">No linked suppliers.</p>
+                  } @else {
+                    <ul class="stocks">
+                      @for (supplier of linkedSuppliers()[row.category.id]; track supplier.id) {
+                        <li>
+                          <div>
+                            <strong>{{ supplier.companyName }}</strong>
+                            <p class="muted ltr">{{ supplier.primaryEmail || supplier.country || '—' }}</p>
+                          </div>
+                        </li>
+                      }
+                    </ul>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </article>
+      }
+    </div>
+  }
+
+  @if (pendingDelete(); as target) {
+    <div class="modal-backdrop" (click)="cancelDelete()" role="presentation"></div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-category-title">
+      <div class="modal-icon" aria-hidden="true">!</div>
+      <div class="modal-copy">
+        <h2 id="delete-category-title">Delete category?</h2>
+        <p>
+          You’re about to remove
+          <strong>{{ target.name }}</strong>
+          . This can’t be undone.
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="ghost" (click)="cancelDelete()" [disabled]="!!deletingId()">
+          Cancel
+        </button>
+        <button type="button" class="danger solid" (click)="confirmDelete()" [disabled]="!!deletingId()">
+          {{ deletingId() === target.id ? 'Deleting...' : 'Delete category' }}
+        </button>
+      </div>
+    </div>
+  }
+</section>

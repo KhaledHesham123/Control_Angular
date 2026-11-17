@@ -1,0 +1,173 @@
+<section class="board" dir="ltr" lang="en">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">RFQ</p>
+      <h1>Confirm RFQ</h1>
+      <p class="lede">Review and edit the request before confirming.</p>
+    </div>
+    <button type="button" class="ghost" (click)="back()">Back to list</button>
+  </header>
+
+  @if (error()) {
+    <div class="banner error" role="alert">{{ error() }}</div>
+  }
+  @if (success()) {
+    <div class="banner ok" role="status">{{ success() }}</div>
+  }
+
+  @if (loading()) {
+    <div class="progress" role="progressbar" aria-label="Loading RFQ"></div>
+  } @else if (detail(); as current) {
+    <form class="panel" (ngSubmit)="submit()" novalidate>
+      <div class="summary">
+        <div>
+          <h2>{{ current.title }}</h2>
+          <p class="muted">{{ current.vesselName }} · {{ categoryNames(current.categories) }}</p>
+        </div>
+        <span class="chip">{{ statusLabel(current.status) }}</span>
+      </div>
+
+      <div class="grid">
+        <label>
+          <span>Title</span>
+          <input
+            id="field-title"
+            name="title"
+            type="text"
+            [(ngModel)]="titleValue"
+            (ngModelChange)="clearFieldError('title')"
+            [class.invalid]="isInvalid('title')"
+            [disabled]="submitting()"
+            required
+          />
+        </label>
+        <label>
+          <span>Status</span>
+          <select name="status" [(ngModel)]="status" [disabled]="submitting()">
+            @for (option of statusOptions; track option) {
+              <option [ngValue]="option">{{ statusLabel(option) }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          <span>Start Date</span>
+          <input
+            id="field-startDate"
+            name="startDate"
+            class="ltr"
+            type="date"
+            [(ngModel)]="startDate"
+            (ngModelChange)="onDatesChanged()"
+            [class.invalid]="isInvalid('startDate')"
+            [disabled]="submitting()"
+          />
+          <small class="field-hint">Leave empty to use today's UTC date.</small>
+        </label>
+        <label>
+          <span>Delivery Date</span>
+          <input
+            id="field-deliveryDate"
+            name="deliveryDate"
+            class="ltr"
+            type="date"
+            [(ngModel)]="deliveryDate"
+            (ngModelChange)="onDatesChanged()"
+            [class.invalid]="isInvalid('deliveryDate')"
+            [disabled]="submitting()"
+            required
+          />
+        </label>
+        <label>
+          <span>Latest Delivery Date</span>
+          <input
+            id="field-latestDeliveryDate"
+            name="latestDeliveryDate"
+            class="ltr"
+            type="date"
+            [(ngModel)]="latestDeliveryDate"
+            (ngModelChange)="onDatesChanged()"
+            [class.invalid]="isInvalid('latestDeliveryDate')"
+            [disabled]="submitting()"
+            required
+          />
+        </label>
+      </div>
+
+      <label class="full">
+        <span>Notes</span>
+        <textarea name="notes" rows="3" [(ngModel)]="notes" [disabled]="submitting()"></textarea>
+      </label>
+
+      <section class="items">
+        <div class="items-head">
+          <h3>Items</h3>
+          <span class="muted">{{ items.length }}</span>
+        </div>
+
+        @if (items.length === 0) {
+          <p class="muted">No items on this RFQ.</p>
+        } @else {
+          <div class="items-list">
+            @for (item of items; track trackItem($index, item); let i = $index) {
+              <article class="item-card">
+                <header class="item-head">
+                  <div class="item-main">
+                    <strong>{{ item.name }}</strong>
+                    <p class="muted ltr">{{ item.code || item.itemNo }} · {{ item.unit }}</p>
+                  </div>
+                  @if (shelfLifeText(item); as life) {
+                    <span class="shelf-meta ltr">
+                      <span class="shelf-label">Shelf life</span>
+                      <span class="shelf-chip">{{ life }}</span>
+                    </span>
+                  }
+                </header>
+
+                <div class="item-fields">
+                  <label class="qty-field">
+                    <span>Qty</span>
+                    <input
+                      class="ltr"
+                      type="number"
+                      min="1"
+                      [(ngModel)]="items[i].quantity"
+                      [id]="'field-' + qtyField(item.id)"
+                      [name]="'qty-' + item.id"
+                      (ngModelChange)="clearFieldError(qtyField(item.id))"
+                      [class.invalid]="isInvalid(qtyField(item.id))"
+                      [disabled]="submitting()"
+                    />
+                  </label>
+
+                  <label class="notes-field">
+                    <span>Item notes</span>
+                    <input
+                      type="text"
+                      [(ngModel)]="items[i].notes"
+                      [name]="'notes-' + item.id"
+                      [disabled]="submitting()"
+                      placeholder="Optional"
+                    />
+                  </label>
+                </div>
+              </article>
+            }
+          </div>
+        }
+      </section>
+
+      <div class="actions">
+        <button type="button" class="ghost" (click)="back()" [disabled]="submitting()">Cancel</button>
+        <button type="submit" class="primary" [disabled]="submitting()">
+          {{ submitting() ? 'Saving...' : 'Confirm RFQ' }}
+        </button>
+      </div>
+    </form>
+  } @else {
+    <div class="empty panel">
+      <h2>RFQ unavailable</h2>
+      <p class="muted">Check the id or go back to the list.</p>
+      <button type="button" class="primary" (click)="back()">Back</button>
+    </div>
+  }
+</section>

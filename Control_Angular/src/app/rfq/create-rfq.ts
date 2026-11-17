@@ -1,11 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { forkJoin } from 'rxjs';
 import { Title } from '@angular/platform-browser';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ProductDto } from '../products/product.model';
 import { ProductService } from '../products/product.service';
 import { RfqRequestService } from './rfq-request.service';
 import {
+  formatCategoryLabel,
   GeneratedSupplierRfqEmail,
   RfqRequest,
   SelectedRfqProduct,
@@ -24,6 +27,8 @@ export class CreateRfq implements OnInit {
   private readonly rfqRequestService = inject(RfqRequestService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly title = inject(Title);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   readonly loadingProducts = signal(false);
   readonly creating = signal(false);
@@ -35,8 +40,7 @@ export class CreateRfq implements OnInit {
 
   readonly products = signal<ProductDto[]>([]);
   readonly categoryOptions = signal<Array<{ id: string; name: string }>>([]);
-  readonly selectedCategoryId = signal<string>('');
-  readonly selectedCategoryName = signal<string>('');
+  readonly checkedCategoryIds = signal<string[]>([]);
   readonly selectedProducts = signal<Record<string, SelectedRfqProduct>>({});
   readonly requestNotes = signal('');
 
@@ -53,31 +57,27 @@ export class CreateRfq implements OnInit {
   readonly rfqStatusLabel = computed(() => this.statusLabel(this.rfq()?.status));
 
   ngOnInit(): void {
-    this.title.setTitle('إنشاء RFQ | Ships Control');
+    this.title.setTitle('RFQ | Ships Control');
+
+    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      const id = params.get('id')?.trim() ?? '';
+      if (!id) {
+        return;
+      }
+      this.rfqId.set(id);
+      this.step.set(2);
+      this.loadRfq(id);
+    });
   }
 
-  onCategoryChange(categoryId: string): void {
-    this.selectedCategoryId.set(categoryId || '');
-    this.selectedProducts.set({});
-    this.products.set([]);
+  onCategoriesChange(categoryIds: string[]): void {
+    this.checkedCategoryIds.set(categoryIds);
     this.error.set(null);
-
-    const selected = this.categoryOptions().find((item) => item.id === categoryId);
-    this.selectedCategoryName.set(selected?.name ?? '');
-
-    if (!categoryId) {
-      return;
-    }
-
     this.loadProducts();
   }
 
   onCategoryLoaded(categories: Array<{ id: string; name: string }>): void {
     this.categoryOptions.set(categories);
-    const selected = categories.find((item) => item.id === this.selectedCategoryId());
-    if (selected) {
-      this.selectedCategoryName.set(selected.name);
-    }
   }
 
   onCategoryFailed(message: string): void {
@@ -85,33 +85,37 @@ export class CreateRfq implements OnInit {
   }
 
   loadProducts(): void {
-    const categoryId = this.selectedCategoryId();
-    if (!categoryId) {
+    const categoryIds = this.checkedCategoryIds();
+    if (categoryIds.length === 0) {
+      this.products.set([]);
+      this.loadingProducts.set(false);
       return;
     }
 
     this.loadingProducts.set(true);
     this.error.set(null);
 
-    this.productService
-      .getByCategory(categoryId, false)
+    forkJoin(categoryIds.map((categoryId) => this.productService.getByCategory(categoryId, false)))
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (result) => {
+        next: (results) => {
           this.loadingProducts.set(false);
-          this.status.set(result.messages?.filter(Boolean).join(' ') || null);
-
-          if (!result.succeeded || !result.data) {
+          const failed = results.find((result) => !result.succeeded || !result.data);
+          if (failed) {
             this.products.set([]);
-            this.error.set(result.messages?.join(' ') || 'تعذر تحميل المنتجات.');
+            this.error.set(failed.messages?.join(' ') || 'تعذر تحميل المنتجات.');
             return;
           }
 
-          const items = result.data.filter((product) => product.isActive);
-          this.products.set(items);
-          if (items[0]?.categoryName) {
-            this.selectedCategoryName.set(items[0].categoryName);
+          const merged = new Map<string, ProductDto>();
+          for (const result of results) {
+            for (const product of result.data ?? []) {
+              if (product.isActive) {
+                merged.set(product.id, product);
+              }
+            }
           }
+          this.products.set([...merged.values()]);
         },
         error: (err: HttpErrorResponse) => {
           this.loadingProducts.set(false);
@@ -119,6 +123,21 @@ export class CreateRfq implements OnInit {
           this.error.set(this.readError(err, 'تعذر تحميل المنتجات.'));
         },
       });
+  }
+
+  productGroups(): { categoryId: string; categoryName: string; products: ProductDto[] }[] {
+    const groups = new Map<string, { categoryId: string; categoryName: string; products: ProductDto[] }>();
+    for (const product of this.products()) {
+      const categoryId = product.categoryId || 'none';
+      const group = groups.get(categoryId) ?? {
+        categoryId,
+        categoryName: product.categoryName || 'منتجات',
+        products: [],
+      };
+      group.products.push(product);
+      groups.set(categoryId, group);
+    }
+    return [...groups.values()];
   }
 
   isProductSelected(productId: string): boolean {
@@ -130,7 +149,7 @@ export class CreateRfq implements OnInit {
   }
 
   toggleProduct(product: ProductDto): void {
-    if (this.creating() || this.step() !== 1 || !this.selectedCategoryId()) {
+    if (this.creating() || this.step() !== 1) {
       return;
     }
 
@@ -148,6 +167,8 @@ export class CreateRfq implements OnInit {
       unit: product.defaultUnit,
       quantity: 1,
       notes: '',
+      categoryId: product.categoryId || '',
+      categoryName: product.categoryName || 'Category',
     };
     this.selectedProducts.set(current);
   }
@@ -162,18 +183,40 @@ export class CreateRfq implements OnInit {
   }
 
   clearCategorySelection(): void {
-    this.selectedCategoryId.set('');
-    this.selectedCategoryName.set('');
-    this.selectedProducts.set({});
+    this.checkedCategoryIds.set([]);
     this.products.set([]);
   }
 
-  createRfq(): void {
-    const categoryId = this.selectedCategoryId();
-    const items = Object.values(this.selectedProducts());
+  checkedCategoryLabel(): string {
+    const names = this.checkedCategoryIds()
+      .map((id) => this.categoryOptions().find((item) => item.id === id)?.name)
+      .filter((name): name is string => !!name);
+    return names.join(' · ') || '—';
+  }
 
-    if (!categoryId) {
-      this.error.set('اختر فئة واحدةً وحدد منتجاتها.');
+  clearSelectedProducts(): void {
+    this.selectedProducts.set({});
+  }
+
+  selectedCategoryIds(): string[] {
+    return [...new Set(Object.values(this.selectedProducts()).map((item) => item.categoryId).filter(Boolean))];
+  }
+
+  selectedCategoryLabel(): string {
+    const names = [...new Set(Object.values(this.selectedProducts()).map((item) => item.categoryName).filter(Boolean))];
+    return names.join(' · ') || '—';
+  }
+
+  categoryNames(categories: { id: string; name: string }[] | null | undefined): string {
+    return (categories ?? []).map((c) => formatCategoryLabel(c)).filter(Boolean).join(' · ') || '—';
+  }
+
+  createRfq(): void {
+    const items = Object.values(this.selectedProducts());
+    const categoryIds = this.selectedCategoryIds();
+
+    if (categoryIds.length === 0) {
+      this.error.set('اختَر منتجات من فئة واحدة على الأقل.');
       return;
     }
 
@@ -192,8 +235,12 @@ export class CreateRfq implements OnInit {
 
     this.rfqRequestService
       .create({
-        categoryId,
+        categoryIds,
+        title: null,
         notes: this.requestNotes().trim() || null,
+        startDate: null,
+        deliveryDate: null,
+        latestDeliveryDate: null,
         items: items.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -206,18 +253,16 @@ export class CreateRfq implements OnInit {
           this.creating.set(false);
           this.status.set(result.messages?.filter(Boolean).join(' ') || null);
 
-          if (!result.succeeded || !result.data) {
-            this.error.set(result.messages?.join(' ') || 'تعذر إنشاء طلب RFQ.');
+          if (!result.succeeded) {
+            this.error.set(result.messages?.join(' ') || 'Failed to create RFQ request.');
             return;
           }
 
-          this.rfqId.set(result.data);
-          this.step.set(2);
-          this.loadRfq(result.data);
+          void this.router.navigateByUrl('/rfq');
         },
         error: (err: HttpErrorResponse) => {
           this.creating.set(false);
-          this.error.set(this.readError(err, 'تعذر إنشاء طلب RFQ.'));
+          this.error.set(this.readError(err, 'Failed to create RFQ request.'));
         },
       });
   }
@@ -268,11 +313,20 @@ export class CreateRfq implements OnInit {
       return;
     }
 
+    const supplierIds = (this.rfq()?.supplierEmails ?? [])
+      .map((email) => email.supplierId)
+      .filter((supplierId) => !!supplierId);
+
+    if (supplierIds.length === 0) {
+      this.error.set('لا يوجد موردين مرتبطين بهذا الطلب لتوليد الإيميل.');
+      return;
+    }
+
     this.generating.set(true);
     this.error.set(null);
 
     this.rfqRequestService
-      .generateContent({ id })
+      .generateEmailContentForSuppliers({ id, supplierIds })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (result) => {
@@ -318,6 +372,7 @@ export class CreateRfq implements OnInit {
     this.emailSubject.set('');
     this.emailBody.set('');
     this.clearCategorySelection();
+    this.clearSelectedProducts();
     this.requestNotes.set('');
     this.error.set(null);
     this.status.set(null);

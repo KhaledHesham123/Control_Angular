@@ -1,0 +1,294 @@
+<section class="board" dir="ltr" lang="en">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">Category Management</p>
+      <h1>Edit Category</h1>
+      <p class="lede">Update details and link or unlink products and suppliers.</p>
+    </div>
+    <button type="button" class="ghost" (click)="back()">Back to categories</button>
+  </header>
+
+  @if (error()) {
+    <div class="banner error" role="alert">{{ error() }}</div>
+  }
+  @if (success()) {
+    <div class="banner ok" role="status">{{ success() }}</div>
+  }
+
+  @if (loading()) {
+    <div class="progress" role="progressbar" aria-label="Loading category"></div>
+  } @else if (category(); as current) {
+    <form class="panel" (ngSubmit)="submit()">
+      <div class="summary">
+        <div>
+          <h2>{{ categoryPath(current) }}</h2>
+          <p class="muted">{{ current.isActive ? 'Active' : 'Inactive' }}</p>
+        </div>
+      </div>
+
+      <label class="full">
+        <span>Name</span>
+        <input name="name" type="text" [(ngModel)]="name" [disabled]="submitting()" required />
+      </label>
+
+      <div class="parent-picker">
+        <span>Parent category</span>
+        @if (parentPathLabel()) {
+          <p class="parent-current">{{ parentPathLabel() }}</p>
+        }
+        <div class="parent-levels">
+          @for (level of parentLevels(); track level.key; let i = $index) {
+            @if (i > 0) {
+              <span class="parent-sep">/</span>
+            }
+            <select
+              [name]="'parentLevel' + i"
+              [ngModel]="level.selectedId"
+              (ngModelChange)="onParentLevelChange(i, $event)"
+              [disabled]="submitting()"
+            >
+              <option value="">None</option>
+              @for (parent of level.options; track parent.id) {
+                <option [value]="parent.id">{{ parent.name }}</option>
+              }
+            </select>
+          }
+        </div>
+      </div>
+
+      <label class="full">
+        <span>Description</span>
+        <textarea name="description" rows="3" [(ngModel)]="description" [disabled]="submitting()"></textarea>
+      </label>
+
+      <label class="check">
+        <input name="isActive" type="checkbox" [(ngModel)]="isActive" [disabled]="submitting()" />
+        <span>Active</span>
+      </label>
+
+      <div class="actions">
+        <button type="submit" class="primary" [disabled]="submitting()">
+          {{ submitting() ? 'Saving...' : 'Save Changes' }}
+        </button>
+      </div>
+    </form>
+
+    <section class="panel users">
+      <header class="section-head">
+        <div>
+          <h2>Products</h2>
+          <p class="muted">Link or unlink products for this category.</p>
+        </div>
+        <div class="search-row">
+          <input
+            class="ltr"
+            type="search"
+            placeholder="Search products"
+            [(ngModel)]="productSearch"
+            [ngModelOptions]="{ standalone: true }"
+            (keyup.enter)="searchProducts()"
+          />
+          <button
+            type="button"
+            class="ghost"
+            (click)="searchProducts()"
+            [disabled]="loadingLinks() || linkingProducts() || unlinkingProducts()"
+          >
+            Refresh
+          </button>
+        </div>
+      </header>
+
+      @if (loadingLinks()) {
+        <p class="muted">Loading products...</p>
+      } @else {
+        <div class="user-cols">
+          <div class="user-col">
+            <h3>Unlinked products</h3>
+            @if (availableProducts().length === 0) {
+              <p class="muted">No products available to link.</p>
+            } @else {
+              <ul class="checks">
+                @for (product of availableProducts(); track product.id) {
+                  <li>
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        [checked]="isSelected(selectedLinkProductIds, product.id)"
+                        (change)="toggleLinkProduct(product.id)"
+                        [disabled]="linkingProducts()"
+                      />
+                      @if (imageUrl(product.imagePath); as src) {
+                        <img class="user-avatar" [src]="src" [alt]="product.name" />
+                      } @else {
+                        <span class="user-avatar fallback" aria-hidden="true">{{ product.name.slice(0, 1) }}</span>
+                      }
+                      <span>
+                        <strong>{{ product.name }}</strong>
+                        <small class="ltr">{{ product.code || 'No code' }}</small>
+                      </span>
+                    </label>
+                  </li>
+                }
+              </ul>
+            }
+            <button
+              type="button"
+              class="primary"
+              (click)="linkProducts()"
+              [disabled]="linkingProducts() || selectedLinkProductIds.length === 0"
+            >
+              {{ linkingProducts() ? 'Linking...' : 'Link Products' }}
+            </button>
+          </div>
+
+          <div class="user-col">
+            <h3>Linked products</h3>
+            @if (linkedProducts().length === 0) {
+              <p class="muted">No linked products.</p>
+            } @else {
+              <ul class="checks">
+                @for (product of linkedProducts(); track product.id) {
+                  <li>
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        [checked]="isSelected(selectedUnlinkProductIds, product.id)"
+                        (change)="toggleUnlinkProduct(product.id)"
+                        [disabled]="unlinkingProducts()"
+                      />
+                      @if (imageUrl(product.imagePath); as src) {
+                        <img class="user-avatar" [src]="src" [alt]="product.name" />
+                      } @else {
+                        <span class="user-avatar fallback" aria-hidden="true">{{ product.name.slice(0, 1) }}</span>
+                      }
+                      <span>
+                        <strong>{{ product.name }}</strong>
+                        <small class="ltr">{{ product.code || 'No code' }}</small>
+                      </span>
+                    </label>
+                  </li>
+                }
+              </ul>
+            }
+            <button
+              type="button"
+              class="danger"
+              (click)="unlinkProducts()"
+              [disabled]="unlinkingProducts() || selectedUnlinkProductIds.length === 0"
+            >
+              {{ unlinkingProducts() ? 'Unlinking...' : 'Unlink Products' }}
+            </button>
+          </div>
+        </div>
+      }
+    </section>
+
+    <section class="panel users">
+      <header class="section-head">
+        <div>
+          <h2>Suppliers</h2>
+          <p class="muted">Link or unlink suppliers for this category.</p>
+        </div>
+        <div class="search-row">
+          <input
+            class="ltr"
+            type="search"
+            placeholder="Search suppliers"
+            [(ngModel)]="supplierSearch"
+            [ngModelOptions]="{ standalone: true }"
+            (keyup.enter)="searchSuppliers()"
+          />
+          <button
+            type="button"
+            class="ghost"
+            (click)="searchSuppliers()"
+            [disabled]="loadingLinks() || linkingSuppliers() || unlinkingSuppliers()"
+          >
+            Refresh
+          </button>
+        </div>
+      </header>
+
+      @if (loadingLinks()) {
+        <p class="muted">Loading suppliers...</p>
+      } @else {
+        <div class="user-cols">
+          <div class="user-col">
+            <h3>Unlinked suppliers</h3>
+            @if (availableSuppliers().length === 0) {
+              <p class="muted">No suppliers available to link.</p>
+            } @else {
+              <ul class="checks">
+                @for (supplier of availableSuppliers(); track supplier.id) {
+                  <li>
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        [checked]="isSelected(selectedLinkSupplierIds, supplier.id)"
+                        (change)="toggleLinkSupplier(supplier.id)"
+                        [disabled]="linkingSuppliers()"
+                      />
+                      <span>
+                        <strong>{{ supplier.companyName }}</strong>
+                        <small class="ltr">{{ supplier.primaryEmail || supplier.country || '—' }}</small>
+                      </span>
+                    </label>
+                  </li>
+                }
+              </ul>
+            }
+            <button
+              type="button"
+              class="primary"
+              (click)="linkSuppliers()"
+              [disabled]="linkingSuppliers() || selectedLinkSupplierIds.length === 0"
+            >
+              {{ linkingSuppliers() ? 'Linking...' : 'Link Suppliers' }}
+            </button>
+          </div>
+
+          <div class="user-col">
+            <h3>Linked suppliers</h3>
+            @if (linkedSuppliers().length === 0) {
+              <p class="muted">No linked suppliers.</p>
+            } @else {
+              <ul class="checks">
+                @for (supplier of linkedSuppliers(); track supplier.id) {
+                  <li>
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        [checked]="isSelected(selectedUnlinkSupplierIds, supplier.id)"
+                        (change)="toggleUnlinkSupplier(supplier.id)"
+                        [disabled]="unlinkingSuppliers()"
+                      />
+                      <span>
+                        <strong>{{ supplier.companyName }}</strong>
+                        <small class="ltr">{{ supplier.primaryEmail || supplier.country || '—' }}</small>
+                      </span>
+                    </label>
+                  </li>
+                }
+              </ul>
+            }
+            <button
+              type="button"
+              class="danger"
+              (click)="unlinkSuppliers()"
+              [disabled]="unlinkingSuppliers() || selectedUnlinkSupplierIds.length === 0"
+            >
+              {{ unlinkingSuppliers() ? 'Unlinking...' : 'Unlink Suppliers' }}
+            </button>
+          </div>
+        </div>
+      }
+    </section>
+  } @else {
+    <div class="empty panel">
+      <h2>Category unavailable</h2>
+      <p class="muted">Check the id or go back to the categories list.</p>
+      <button type="button" class="primary" (click)="back()">Back</button>
+    </div>
+  }
+</section>

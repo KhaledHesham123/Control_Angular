@@ -24,3 +24,83 @@ select {
 .error {
   color: #9b2c2c;
 }
+
+.check-tree {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.tree-block {
+  border: 1px solid #e6e0d4;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.tree-parent,
+.tree-leaf,
+.all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tree-parent,
+.tree-leaf {
+  min-height: 38px;
+  padding: 4px 10px;
+}
+
+.tree-children {
+  margin-inline-start: 16px;
+  border-inline-start: 2px solid #d9d1c3;
+}
+
+.arrow {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #14324c;
+  font: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.arrow:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.node-name {
+  color: #14324c;
+  font-weight: 700;
+}
+
+.count {
+  color: #667386;
+  font-weight: 700;
+}
+
+.all {
+  margin-inline-start: auto;
+  color: #14324c;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tree-leaf {
+  color: #14324c;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.check-tree input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}

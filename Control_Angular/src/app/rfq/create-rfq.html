@@ -13,7 +13,7 @@
         <h1>إنشاء RFQ</h1>
       </div>
     </div>
-    <p class="lede">اختر فئة واحدةً ومنتجاتها، أنشئ الطلب، ثم ولّد إيميلات الموردين بالـ AI.</p>
+    <p class="lede">اختَر منتجات من أكتر من فئة في نفس الطلب، ثم أنشئ الـ RFQ.</p>
   </header>
 
   <ol class="steps" aria-label="خطوات إنشاء RFQ">
@@ -35,7 +35,7 @@
   @if (error()) {
     <div class="banner" role="alert">
       <p>{{ error() }}</p>
-      @if (step() === 1 && selectedCategoryId()) {
+      @if (step() === 1 && checkedCategoryIds().length) {
         <button type="button" (click)="loadProducts()">إعادة المحاولة</button>
       } @else if (rfqId()) {
         <button type="button" (click)="loadRfq(rfqId()!)">إعادة تحميل RFQ</button>
@@ -52,12 +52,12 @@
       <div class="panel-head">
         <div>
           <h2>الخطوة 1 — اختيار المنتجات</h2>
-          <p>اختَر الفئة من Category Lookup، ثم حدّد منتجات الفئة دي فقط.</p>
+          <p>غيّر الفئة عشان تضيف منتجات من فئة تانية. الاختيارات السابقة بتفضل موجودة.</p>
         </div>
         <div class="panel-actions">
-          @if (selectedCategoryId()) {
-            <button type="button" class="ghost" (click)="clearCategorySelection()" [disabled]="creating()">
-              تغيير الفئة
+          @if (selectedCount() > 0) {
+            <button type="button" class="ghost" (click)="clearSelectedProducts()" [disabled]="creating()">
+              مسح الاختيارات
             </button>
           }
           <button
@@ -72,11 +72,11 @@
       </div>
 
       <app-category-lookup
-        label="Category Lookup"
-        [categoryId]="selectedCategoryId()"
+        label="الفئات"
+        [tree]="true"
+        [selectionIds]="checkedCategoryIds()"
         [disabled]="creating()"
-        [required]="true"
-        (categoryIdChange)="onCategoryChange($event)"
+        (categoryIdsChange)="onCategoriesChange($event)"
         (loaded)="onCategoryLoaded($event)"
         (failed)="onCategoryFailed($event)"
       />
@@ -93,14 +93,15 @@
       </label>
 
       <div class="selection-summary">
-        <span>الفئة المختارة: <strong>{{ selectedCategoryName() || '—' }}</strong></span>
+        <span>الفئات المختارة: <strong>{{ checkedCategoryLabel() }}</strong></span>
+        <span>الفئات في الطلب: <strong>{{ selectedCategoryLabel() }}</strong></span>
         <span>المنتجات: <strong>{{ selectedCount() }}</strong></span>
       </div>
 
-      @if (!selectedCategoryId()) {
+      @if (checkedCategoryIds().length === 0) {
         <div class="empty">
           <h3>ابدأ باختيار الفئة</h3>
-          <p>بعد اختيار الفئة هتظهر منتجاتها هنا.</p>
+          <p>علّم الفئات، أو استخدم الكل تحت الأب، وهتظهر المنتجات هنا.</p>
         </div>
       } @else if (loadingProducts()) {
         <div class="progress" role="progressbar" aria-label="جارٍ تحميل المنتجات"></div>
@@ -108,19 +109,20 @@
       } @else if (products().length === 0) {
         <div class="empty">
           <h3>لا توجد منتجات</h3>
-          <p>مفيش منتجات نشطة في الفئة المختارة.</p>
+          <p>مفيش منتجات نشطة في الفئات المختارة.</p>
         </div>
       } @else {
+        @for (group of productGroups(); track group.categoryId) {
         <article class="category-card selected">
           <header>
             <div>
-              <h3>{{ selectedCategoryName() || 'المنتجات' }}</h3>
+              <h3>{{ group.categoryName }}</h3>
             </div>
-            <span class="count">{{ products().length }} منتج</span>
+            <span class="count">{{ group.products.length }} منتج</span>
           </header>
 
           <ul class="product-list">
-            @for (product of products(); track product.id) {
+            @for (product of group.products; track product.id) {
               <li [class.checked]="isProductSelected(product.id)">
                 <label class="product-row">
                   <input
@@ -169,6 +171,7 @@
             }
           </ul>
         </article>
+        }
       }
     </section>
   }
@@ -205,7 +208,7 @@
           </article>
           <article>
             <span>الفئة</span>
-            <strong>{{ current.categoryName }}</strong>
+            <strong>{{ categoryNames(current.categories) }}</strong>
           </article>
           <article>
             <span>الحالة</span>

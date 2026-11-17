@@ -78,6 +78,30 @@
           [disabled]="submitting()"
         />
       </label>
+
+      <label>
+        <span>Shelf Life Value</span>
+        <input
+          name="shelfLifeValue"
+          class="ltr"
+          type="number"
+          min="1"
+          step="1"
+          [(ngModel)]="shelfLifeValue"
+          [disabled]="submitting()"
+          placeholder="Optional"
+        />
+      </label>
+
+      <label>
+        <span>Shelf Life Unit</span>
+        <select name="shelfLifeUnit" [(ngModel)]="shelfLifeUnit" [disabled]="submitting()">
+          <option [ngValue]="null">None</option>
+          @for (unit of shelfLifeUnitOptions; track unit) {
+            <option [ngValue]="unit">{{ shelfLifeUnitLabels[unit] }}</option>
+          }
+        </select>
+      </label>
     </div>
 
     <label class="full">

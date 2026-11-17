@@ -325,19 +325,23 @@ button:disabled {
 
 .product-list {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
+  align-items: start;
 }
 
 .product-list li {
   padding: 12px;
+  border: 1px solid #ebe4d8;
   border-radius: 12px;
   background: #f7f4ee;
 }
 
 .product-list li.checked {
+  border-color: #1a6b73;
   background: #eef7f5;
 }
 
@@ -361,9 +365,19 @@ button:disabled {
 
 .product-edit {
   display: grid;
-  grid-template-columns: 110px 1fr;
-  gap: 10px;
-  margin-top: 12px;
+  grid-template-columns: 80px 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.product-meta {
+  min-width: 0;
+}
+
+.product-meta strong,
+.product-meta span,
+.product-meta small {
+  overflow-wrap: anywhere;
 }
 
 .product-edit .grow {
