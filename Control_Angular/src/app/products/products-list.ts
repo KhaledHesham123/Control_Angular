@@ -182,7 +182,7 @@ export class ProductsList implements OnInit {
   }
 
   back(): void {
-    void this.router.navigateByUrl('/');
+    void this.router.navigateByUrl('/home');
   }
 
   imageUrl(path: string | null | undefined): string | null {

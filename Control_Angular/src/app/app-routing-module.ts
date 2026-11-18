@@ -17,6 +17,9 @@ import { RfqEmail } from './rfq/rfq-email';
 import { RfqList } from './rfq/rfq-list';
 import { CreateVessel } from './vessels/create-vessel';
 import { EditVessel } from './vessels/edit-vessel';
+import { VesselShipView } from './vessels/ship-view/vessel-ship-view';
+import { OwnerAnalysis } from './analysis/owner-analysis';
+import { RecommendedAnalysis } from './analysis/recommended-analysis';
 import { VesselsList } from './vessels/vessels-list';
 
 const routes: Routes = [
@@ -30,7 +33,10 @@ const routes: Routes = [
     component: ControlShell,
     canActivate: [authGuard],
     children: [
-      { path: '', pathMatch: 'full', component: ControlHome },
+      { path: '', pathMatch: 'full', component: VesselShipView },
+      { path: 'analysis', component: OwnerAnalysis },
+      { path: 'recommended-analysis', component: RecommendedAnalysis },
+      { path: 'home', component: ControlHome },
       { path: 'products', component: ProductsList },
       { path: 'products/create', component: CreateProduct },
       { path: 'products/edit/:id', component: EditProduct },

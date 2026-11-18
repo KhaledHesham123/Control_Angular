@@ -1,0 +1,67 @@
+:host {
+  display: block;
+}
+
+.fleet {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  column-gap: 56px;
+  row-gap: 36px;
+  align-items: start;
+  padding: 28px 32px;
+  box-sizing: border-box;
+}
+
+.vessel-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 240px;
+  background: transparent;
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  cursor: grab;
+  touch-action: none;
+}
+
+.stage.dragging {
+  cursor: grabbing;
+}
+
+.name {
+  margin: 6px 0 0;
+  color: #14324c;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 10px;
+  color: #14324c;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+@media (max-width: 800px) {
+  .fleet {
+    grid-template-columns: 1fr;
+    column-gap: 0;
+    padding: 20px;
+  }
+
+  .vessel-card {
+    height: 220px;
+  }
+}

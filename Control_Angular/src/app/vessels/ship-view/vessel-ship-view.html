@@ -1,0 +1,12 @@
+<section class="fleet" dir="ltr" lang="en">
+  @for (ship of ships; track ship.name) {
+    <article class="vessel-card">
+      <div class="stage" #stage role="img" [attr.aria-label]="ship.name">
+        @if (failed()) {
+          <p class="fallback">The 3D view could not start in this browser.</p>
+        }
+      </div>
+      <h2 class="name">{{ ship.name }}</h2>
+    </article>
+  }
+</section>

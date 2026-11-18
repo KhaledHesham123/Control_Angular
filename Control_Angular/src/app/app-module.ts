@@ -23,6 +23,9 @@ import { CategoryLookup } from './shared/category-lookup';
 import { CreateVessel } from './vessels/create-vessel';
 import { EditVessel } from './vessels/edit-vessel';
 import { VesselsList } from './vessels/vessels-list';
+import { VesselShipView } from './vessels/ship-view/vessel-ship-view';
+import { OwnerAnalysis } from './analysis/owner-analysis';
+import { RecommendedAnalysis } from './analysis/recommended-analysis';
 
 @NgModule({
   declarations: [
@@ -35,6 +38,9 @@ import { VesselsList } from './vessels/vessels-list';
     CreateProduct,
     EditProduct,
     VesselsList,
+    VesselShipView,
+    OwnerAnalysis,
+    RecommendedAnalysis,
     CreateVessel,
     EditVessel,
     CategoriesList,

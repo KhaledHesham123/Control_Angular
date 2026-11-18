@@ -249,7 +249,7 @@ export class CategoriesList implements OnInit {
   }
 
   back(): void {
-    void this.router.navigateByUrl('/');
+    void this.router.navigateByUrl('/home');
   }
 
   private readError(err: HttpErrorResponse, fallback: string): string {

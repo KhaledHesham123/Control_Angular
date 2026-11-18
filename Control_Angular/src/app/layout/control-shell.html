@@ -16,8 +16,11 @@
 
     <nav class="side-nav">
       <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" (click)="closeMobile()">
-        Control Center
+        Vessels
       </a>
+      <a routerLink="/analysis" routerLinkActive="active" (click)="closeMobile()">Analysis</a>
+      <a routerLink="/recommended-analysis" routerLinkActive="active" (click)="closeMobile()">Recommended Analysis</a>
+      <a routerLink="/home" routerLinkActive="active" (click)="closeMobile()">Control Center</a>
       <a routerLink="/quotations" routerLinkActive="active" (click)="closeMobile()">Quotations</a>
       <a routerLink="/rfq" routerLinkActive="active" (click)="closeMobile()">RFQ</a>
     </nav>

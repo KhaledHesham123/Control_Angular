@@ -1,0 +1,154 @@
+<section class="analysis" dir="rtl" lang="ar">
+  <header class="head">
+    <div>
+      <p class="eyebrow">{{ data.periodLabel }} · شكل تجريبي</p>
+      <h1>Recommended Analysis</h1>
+    </div>
+    <p class="scope">الصرف، كارت المورد، التنبيهات، والبنود اللي تاخد التفاوض.</p>
+  </header>
+
+  <section class="block">
+    <div class="block-head">
+      <h2>الصرف على كل سفينة</h2>
+      <p>مقابل الميزانية، وتكلفة الفرد في اليوم.</p>
+    </div>
+    <p class="method">هتتحسب من العروض المقبولة لكل سفينة.</p>
+    <div class="vessels">
+      @for (vessel of data.vessels; track vessel.name) {
+        <article class="vessel">
+          <header>
+            <h3>{{ vessel.name }}</h3>
+            <span [class]="budgetState(vessel.spendUsd, vessel.budgetUsd)">
+              {{ signed(budgetPct(vessel.spendUsd, vessel.budgetUsd) - 100) }}
+            </span>
+          </header>
+          <p class="spend">{{ money(vessel.spendUsd) }} <small>من {{ money(vessel.budgetUsd) }}</small></p>
+          <div class="track" aria-hidden="true">
+            <span [style.width.%]="budgetFill(vessel.spendUsd, vessel.budgetUsd)"></span>
+          </div>
+          <p class="man-day">{{ vessel.costPerManDayUsd }}$ / فرد / يوم · {{ vessel.crew }} فرد</p>
+          <ul>
+            @for (category of vessel.categories; track category.name) {
+              <li>
+                <span>{{ category.name }}</span>
+                <span class="meter"><i [style.width.%]="categoryWidth(category.spendUsd, vessel.spendUsd)"></i></span>
+                <b>{{ money(category.spendUsd) }}</b>
+              </li>
+            }
+          </ul>
+        </article>
+      }
+    </div>
+  </section>
+
+  <div class="split">
+    <section class="block">
+      <div class="block-head">
+        <h2>كارت المورد</h2>
+        <p>مؤشر السعر مقابل متوسط البند. الموجب يعني أغلى.</p>
+      </div>
+      <h3 class="group">الأحسن</h3>
+      @for (supplier of data.topSuppliers; track supplier.name) {
+        <ng-container *ngTemplateOutlet="score; context: { $implicit: supplier }" />
+      }
+      <h3 class="group weak">الأضعف</h3>
+      @for (supplier of data.bottomSuppliers; track supplier.name) {
+        <ng-container *ngTemplateOutlet="score; context: { $implicit: supplier }" />
+      }
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <h2>تنبيهات</h2>
+        <p>نفاد، هدر، وسعر لا يشبه الباقي.</p>
+      </div>
+      <ul class="alerts">
+        @for (alert of data.alerts; track alert.title) {
+          <li [class]="alert.kind">
+            <span>{{ alertLabel(alert.kind) }}</span>
+            <div>
+              <strong>{{ alert.title }}</strong>
+              <p>{{ alert.detail }}</p>
+            </div>
+          </li>
+        }
+      </ul>
+    </section>
+  </div>
+
+  <div class="split">
+    <section class="block">
+      <div class="block-head">
+        <h2>البنود اللي تاخد التفاوض</h2>
+        <p>أكبر البنود في الصرف هذا الشهر.</p>
+      </div>
+      <ul class="bars">
+        @for (item of data.pareto; track item.name) {
+          <li>
+            <div>
+              <strong>{{ item.name }}</strong>
+              <span>{{ item.vessel }}</span>
+            </div>
+            <span class="meter"><i [style.width.%]="paretoWidth(item.spendUsd)"></i></span>
+            <b>{{ money(item.spendUsd) }}</b>
+          </li>
+        }
+      </ul>
+    </section>
+
+    <section class="block">
+      <div class="block-head">
+        <h2>الفلوس رايحة لمين</h2>
+        <p>نصيب كل مورد من صرف الشهر.</p>
+      </div>
+      <ul class="bars">
+        @for (share of data.concentration; track share.supplier) {
+          <li>
+            <div>
+              <strong>{{ share.supplier }}</strong>
+              <span>{{ share.sharePercent }}%</span>
+            </div>
+            <span class="meter"><i [style.width.%]="share.sharePercent"></i></span>
+            <b>{{ money(share.spendUsd) }}</b>
+          </li>
+        }
+      </ul>
+    </section>
+  </div>
+</section>
+
+<ng-template #score let-supplier>
+  <article class="score">
+    <header>
+      <h3>{{ supplier.name }}</h3>
+      <b>{{ supplier.score }}</b>
+    </header>
+    <dl>
+      <div>
+        <dt>مقابل السوق</dt>
+        <dd [class]="supplier.priceIndexPercent > 0 ? 'hot' : 'cheap'">{{ signed(supplier.priceIndexPercent) }}</dd>
+      </div>
+      <div>
+        <dt>الرد</dt>
+        <dd>{{ supplier.responseRatePercent }}% · {{ supplier.responseHours }} س</dd>
+      </div>
+      <div>
+        <dt>اكتمال العرض</dt>
+        <dd>{{ supplier.completenessPercent }}%</dd>
+      </div>
+      <div>
+        <dt>Exact</dt>
+        <dd>{{ supplier.exactPercent }}%</dd>
+      </div>
+      <div>
+        <dt>الأرخص</dt>
+        <dd>{{ supplier.cheapestWinPercent }}%</dd>
+      </div>
+      <div>
+        <dt>اتختار</dt>
+        <dd>{{ supplier.selectedPercent }}%</dd>
+      </div>
+    </dl>
+    <p>{{ supplier.note }}</p>
+  </article>
+</ng-template>
