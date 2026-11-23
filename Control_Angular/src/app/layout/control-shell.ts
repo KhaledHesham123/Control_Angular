@@ -1,5 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { NavigationEnd, Router } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { filter, map, startWith } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 
 @Component({
@@ -12,7 +14,16 @@ export class ControlShell {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
 
-  mobileOpen = false;
+  menuOpen = false;
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      map((event) => event.urlAfterRedirects),
+      startWith(this.router.url),
+    ),
+    { initialValue: this.router.url },
+  );
+  readonly shipWorkspace = computed(() => this.url().startsWith('/ship'));
 
   readonly session = this.auth.session;
   readonly displayName = computed(() => {
@@ -21,12 +32,12 @@ export class ControlShell {
   });
   readonly vesselName = computed(() => this.session()?.vessel?.name ?? null);
 
-  toggleMobile(): void {
-    this.mobileOpen = !this.mobileOpen;
+  toggleMenu(): void {
+    this.menuOpen = !this.menuOpen;
   }
 
-  closeMobile(): void {
-    this.mobileOpen = false;
+  closeMenu(): void {
+    this.menuOpen = false;
   }
 
   logout(): void {

@@ -1,0 +1,1345 @@
+/* ───────────────────────────────────────────────
+   Ship workspace UI kit — كل القواعد مقيّدة بـ .ship-app
+   ─────────────────────────────────────────────── */
+
+.ship-app {
+  --bg: #eef2f4;
+  --paper: #ffffff;
+  --ink: #12222e;
+  --muted: #62727f;
+  --line: #e1e7ea;
+  --line-strong: #cfd8dd;
+  --navy: #0e2238;
+  --navy-2: #14324c;
+  --teal: #167a82;
+  --teal-soft: #e3f2f3;
+  --gold: #d4a857;
+  --gold-soft: #fbf3e0;
+  --ok: #1b8a5a;
+  --ok-soft: #e2f4ea;
+  --warn: #b97a0b;
+  --warn-soft: #fdf1d6;
+  --bad: #c0392b;
+  --bad-soft: #fbe4e0;
+  --info: #2b6cb0;
+  --info-soft: #e3eefa;
+  --violet: #6b4fb3;
+  --violet-soft: #ece7f8;
+  --radius: 14px;
+  --shadow: 0 1px 2px rgba(14, 34, 56, 0.05), 0 8px 22px -14px rgba(14, 34, 56, 0.25);
+
+  display: grid;
+  grid-template-columns: 276px minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  direction: rtl;
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.ship-app *,
+.ship-app *::before,
+.ship-app *::after {
+  box-sizing: border-box;
+}
+
+.ship-app h1,
+.ship-app h2,
+.ship-app h3,
+.ship-app h4,
+.ship-app p {
+  margin: 0;
+}
+
+.ship-app a {
+  color: var(--teal);
+  text-decoration: none;
+}
+
+.ship-app .ic {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ───────── الشريط الجانبي ───────── */
+
+.ship-app .rail {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--navy) 0%, #0a1a2b 100%);
+  color: #d9e4ec;
+  z-index: 40;
+}
+
+.ship-app .rail-top {
+  padding: 18px 16px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ship-app .rail-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.ship-app .rail-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: linear-gradient(135deg, var(--gold), #b8893a);
+  color: #1b2a36;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.ship-app .rail-brand small {
+  display: block;
+  color: #8fa6b8;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.ship-app .rail-brand strong {
+  color: #fff;
+  font-size: 1.02rem;
+}
+
+.ship-app .rail-select {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.ship-app .rail-select span {
+  color: #8fa6b8;
+  font-size: 0.72rem;
+}
+
+.ship-app .rail-select select {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.ship-app .rail-select option {
+  color: #12222e;
+}
+
+.ship-app .rail-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 10px 16px;
+}
+
+.ship-app .rail-sec {
+  margin-top: 14px;
+}
+
+.ship-app .rail-sec h3 {
+  padding: 0 10px 6px;
+  color: #7f97aa;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.ship-app .rail-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  margin-bottom: 2px;
+  border-radius: 10px;
+  color: #cbd8e2;
+  font-size: 0.9rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.ship-app .rail-link:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.ship-app .rail-link.active {
+  background: rgba(212, 168, 87, 0.16);
+  color: var(--gold);
+  box-shadow: inset -3px 0 0 var(--gold);
+}
+
+.ship-app .rail-link .count {
+  margin-inline-start: auto;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #1b2a36;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.ship-app .rail-foot {
+  padding: 12px 16px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 8px;
+}
+
+.ship-app .rail-foot a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #9fb3c3;
+  font-size: 0.84rem;
+}
+
+.ship-app .rail-foot a:hover {
+  color: #fff;
+}
+
+.ship-app .rail-toggle {
+  display: none;
+}
+
+.ship-app .rail-scrim {
+  display: none;
+}
+
+/* ───────── الصفحة ───────── */
+
+.ship-app .main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ship-app .sbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 28px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+
+.ship-app .sbar-ship {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ship-app .sbar-ship b {
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.ship-app .sbar-ship small {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.ship-app .sbar .spacer {
+  flex: 1;
+}
+
+.ship-app .role-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--teal-soft);
+  color: var(--teal);
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ship-app .page {
+  padding: 24px 28px 60px;
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  max-width: 1500px;
+  width: 100%;
+}
+
+.ship-app .page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.ship-app .page-head h1 {
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.ship-app .page-head p {
+  color: var(--muted);
+  margin-top: 2px;
+  max-width: 70ch;
+}
+
+.ship-app .actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ───────── مكونات ───────── */
+
+.ship-app .card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.ship-app .card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ship-app .card-head h2,
+.ship-app .card-head h3 {
+  font-size: 1.02rem;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.ship-app .card-head small {
+  color: var(--muted);
+}
+
+.ship-app .card-body {
+  padding: 16px 18px;
+}
+
+.ship-app .card-body.flush {
+  padding: 0;
+}
+
+.ship-app .grid {
+  display: grid;
+  gap: 16px;
+}
+.ship-app .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ship-app .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ship-app .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ship-app .g-main { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
+.ship-app .auto { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+
+.ship-app .row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ship-app .stack {
+  display: grid;
+  gap: 10px;
+}
+
+.ship-app .between {
+  justify-content: space-between;
+}
+
+.ship-app .muted {
+  color: var(--muted);
+}
+
+.ship-app .small {
+  font-size: 0.82rem;
+}
+
+.ship-app .num {
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: inline-block;
+}
+
+.ship-app .strong {
+  font-weight: 800;
+}
+
+.ship-app .ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: inline-block;
+}
+
+.ship-app .kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.ship-app .kpi {
+  position: relative;
+  padding: 14px 16px 14px 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.ship-app .kpi::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 4px;
+  background: var(--teal);
+}
+
+.ship-app .kpi.warn::before { background: var(--warn); }
+.ship-app .kpi.bad::before { background: var(--bad); }
+.ship-app .kpi.ok::before { background: var(--ok); }
+.ship-app .kpi.gold::before { background: var(--gold); }
+
+.ship-app .kpi label {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.ship-app .kpi strong {
+  display: block;
+  font-size: 1.55rem;
+  font-weight: 800;
+  line-height: 1.25;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+.ship-app .kpi small {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+/* أزرار */
+.ship-app .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.ship-app .btn:hover:not(:disabled) {
+  background: #f3f7f8;
+  border-color: var(--teal);
+}
+
+.ship-app .btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.ship-app .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ship-app .btn-primary {
+  background: linear-gradient(135deg, var(--teal), #0f5f66);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 6px 14px -8px rgba(22, 122, 130, 0.9);
+}
+
+.ship-app .btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1a8c95, #11666d);
+  border-color: transparent;
+}
+
+.ship-app .btn-gold {
+  background: var(--gold);
+  border-color: transparent;
+  color: #1b2a36;
+}
+
+.ship-app .btn-gold:hover:not(:disabled) {
+  background: #e0b865;
+  border-color: transparent;
+}
+
+.ship-app .btn-danger {
+  color: var(--bad);
+  border-color: #efc2bb;
+  background: #fff;
+}
+
+.ship-app .btn-danger:hover:not(:disabled) {
+  background: var(--bad-soft);
+  border-color: var(--bad);
+}
+
+.ship-app .btn-sm {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  border-radius: 8px;
+}
+
+.ship-app .btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.ship-app .btn-block {
+  width: 100%;
+}
+
+.ship-app .btn:focus-visible,
+.ship-app .rail-link:focus-visible,
+.ship-app .tab:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* شارات */
+.ship-app .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+  background: #eef1f3;
+  color: #46545f;
+}
+
+.ship-app .badge.ok,
+.ship-app .badge.done { background: var(--ok-soft); color: var(--ok); }
+.ship-app .badge.warn { background: var(--warn-soft); color: var(--warn); }
+.ship-app .badge.bad { background: var(--bad-soft); color: var(--bad); }
+.ship-app .badge.info { background: var(--info-soft); color: var(--info); }
+.ship-app .badge.violet { background: var(--violet-soft); color: var(--violet); }
+.ship-app .badge.gold { background: var(--gold-soft); color: #8a6516; }
+.ship-app .badge.muted { background: #eef1f3; color: #6b7a86; }
+
+/* نماذج */
+.ship-app .field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ship-app .field > span,
+.ship-app .field > label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.ship-app input:not([type='checkbox']):not([type='radio']),
+.ship-app select,
+.ship-app textarea {
+  width: 100%;
+  padding: 8px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.92rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ship-app textarea {
+  resize: vertical;
+  min-height: 70px;
+}
+
+.ship-app input:focus,
+.ship-app select:focus,
+.ship-app textarea:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(22, 122, 130, 0.16);
+}
+
+.ship-app input[disabled],
+.ship-app select[disabled] {
+  background: #f1f4f5;
+  color: var(--muted);
+}
+
+.ship-app .form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.ship-app .form-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.ship-app .check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ship-app .check input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--teal);
+}
+
+.ship-app .search {
+  min-width: 220px;
+  max-width: 320px;
+}
+
+/* جداول */
+.ship-app .table-wrap {
+  overflow-x: auto;
+}
+
+.ship-app .tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.ship-app .tbl th {
+  padding: 10px 14px;
+  background: #f5f8f9;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: start;
+  white-space: nowrap;
+}
+
+.ship-app .tbl td {
+  padding: 10px 14px;
+  border-bottom: 1px solid #edf1f3;
+  vertical-align: middle;
+}
+
+.ship-app .tbl tbody tr:hover {
+  background: #f8fbfb;
+}
+
+.ship-app .tbl tr.dim td {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.ship-app .tbl tfoot td {
+  background: #f5f8f9;
+  font-weight: 800;
+}
+
+.ship-app .tbl .end {
+  text-align: end;
+}
+
+.ship-app .tbl input,
+.ship-app .tbl select {
+  padding: 5px 8px;
+  font-size: 0.86rem;
+}
+
+.ship-app .tbl td.tight {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.ship-app .tbl td.tight .row {
+  flex-wrap: nowrap;
+}
+
+.ship-app td.num,
+.ship-app th.num {
+  display: table-cell;
+  direction: ltr;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* تبويبات */
+.ship-app .tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #e4eaed;
+  border-radius: 12px;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.ship-app .tab {
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ship-app .tab.on {
+  background: #fff;
+  color: var(--navy);
+  box-shadow: 0 1px 3px rgba(14, 34, 56, 0.15);
+}
+
+.ship-app .tab .count {
+  margin-inline-start: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #1b2a36;
+  font-size: 0.72rem;
+}
+
+/* مقاييس */
+.ship-app .gauge {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: #e5ecef;
+  overflow: hidden;
+}
+
+.ship-app .gauge i {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  border-radius: 999px;
+  background: var(--ok);
+  transition: width 0.4s var(--ease-out, ease);
+}
+
+.ship-app .gauge.warn i { background: #e0a21b; }
+.ship-app .gauge.bad i { background: var(--bad); }
+
+.ship-app .gauge-row {
+  display: grid;
+  gap: 5px;
+}
+
+.ship-app .gauge-row .top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.86rem;
+}
+
+.ship-app .tank-card {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbfdfd;
+  display: grid;
+  gap: 8px;
+}
+
+.ship-app .tank-card .value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+
+/* تنبيهات */
+.ship-app .alert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 11px 14px;
+  border-radius: 11px;
+  background: var(--info-soft);
+  color: #1d4e80;
+  border: 1px solid #c7dcf2;
+}
+
+.ship-app .alert.warn { background: var(--warn-soft); color: #7d5207; border-color: #f0dba5; }
+.ship-app .alert.bad { background: var(--bad-soft); color: #8e2a20; border-color: #f0c1ba; }
+.ship-app .alert.ok { background: var(--ok-soft); color: #14663f; border-color: #bfe4cf; }
+
+.ship-app .empty {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.ship-app .empty .ic {
+  width: 34px;
+  height: 34px;
+  opacity: 0.5;
+}
+
+/* نوافذ */
+.ship-app .modal-back {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 26, 43, 0.55);
+  backdrop-filter: blur(3px);
+  animation: sc-fade 0.18s ease-out;
+}
+
+.ship-app .modal {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.5);
+  animation: sc-pop 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.ship-app .modal.wide { width: min(1080px, 100%); }
+.ship-app .modal.narrow { width: min(480px, 100%); }
+
+.ship-app .modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ship-app .modal-head h3 {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--navy);
+}
+
+.ship-app .modal-body {
+  padding: 18px 20px;
+  overflow-y: auto;
+  display: grid;
+  gap: 14px;
+}
+
+.ship-app .modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line);
+  background: #f8fafb;
+  border-radius: 0 0 16px 16px;
+  flex-wrap: wrap;
+}
+
+@keyframes sc-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sc-pop { from { opacity: 0; transform: translateY(12px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+.ship-app .toast {
+  position: fixed;
+  inset-block-end: 22px;
+  inset-inline-start: 50%;
+  transform: translateX(50%);
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: var(--navy);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 18px 40px -14px rgba(0, 0, 0, 0.55);
+  animation: sc-toast 0.25s ease-out;
+}
+
+.ship-app .toast.ok { border-inline-start: 5px solid #3fcf8e; }
+.ship-app .toast.warn { border-inline-start: 5px solid #f1b84a; }
+.ship-app .toast.bad { border-inline-start: 5px solid #ff7a6b; }
+
+@keyframes sc-toast { from { opacity: 0; transform: translate(50%, 12px); } to { opacity: 1; transform: translate(50%, 0); } }
+
+/* خطوات الطلب */
+.ship-app .steps {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  padding: 4px 2px;
+}
+
+.ship-app .step {
+  flex: 1;
+  min-width: 108px;
+  position: relative;
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.ship-app .step i {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #e4eaed;
+  color: #7b8a95;
+  font-style: normal;
+  font-size: 0.8rem;
+  position: relative;
+  z-index: 1;
+}
+
+.ship-app .step::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  inset-inline-start: calc(50% + 16px);
+  inset-inline-end: calc(-50% + 16px);
+  height: 2px;
+  background: #e4eaed;
+}
+
+.ship-app .step:last-child::after { display: none; }
+.ship-app .step.done i { background: var(--ok); color: #fff; }
+.ship-app .step.done::after { background: var(--ok); }
+.ship-app .step.done { color: var(--ok); }
+.ship-app .step.now i { background: var(--gold); color: #1b2a36; box-shadow: 0 0 0 4px rgba(212, 168, 87, 0.25); }
+.ship-app .step.now { color: var(--navy); }
+
+/* خط زمني */
+.ship-app .timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+
+.ship-app .timeline li {
+  position: relative;
+  padding: 0 22px 14px 0;
+  font-size: 0.88rem;
+}
+
+.ship-app .timeline li::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: auto;
+  right: 4px;
+  top: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--teal);
+}
+
+.ship-app .timeline li::after {
+  content: '';
+  position: absolute;
+  right: 8px;
+  top: 16px;
+  bottom: 0;
+  width: 1px;
+  background: var(--line-strong);
+}
+
+.ship-app .timeline li:last-child::after { display: none; }
+.ship-app .timeline small { color: var(--muted); display: block; }
+
+/* نجوم */
+.ship-app .stars {
+  display: inline-flex;
+  gap: 1px;
+  color: #d9a21b;
+  letter-spacing: 1px;
+  direction: ltr;
+}
+
+.ship-app .stars .off { color: #d2d9de; }
+
+.ship-app .star-pick {
+  display: inline-flex;
+  gap: 2px;
+  direction: ltr;
+}
+
+.ship-app .star-pick button {
+  border: 0;
+  background: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #d2d9de;
+  padding: 0 2px;
+}
+
+.ship-app .star-pick button.on { color: #d9a21b; }
+
+/* تقسيمات */
+.ship-app .cat-tree {
+  display: grid;
+  gap: 2px;
+}
+
+.ship-app .cat-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: start;
+  cursor: pointer;
+}
+
+.ship-app .cat-btn:hover { background: #f1f6f7; }
+.ship-app .cat-btn.on { background: var(--teal-soft); color: var(--teal); font-weight: 800; }
+.ship-app .cat-btn.sub { padding-inline-start: 30px; font-size: 0.86rem; color: #43525e; }
+.ship-app .cat-btn .count { margin-inline-start: auto; color: var(--muted); font-size: 0.78rem; }
+
+.ship-app .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ship-app .chip {
+  padding: 4px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  color: #43525e;
+}
+
+.ship-app .chip.on {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
+}
+
+.ship-app .pill-note {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+/* شحنات بيانات الصنف في قائمة الطلب */
+.ship-app .pick-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+}
+
+.ship-app .pick-item.in-cart {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+
+.ship-app .qty {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.ship-app .qty button {
+  width: 30px;
+  height: 32px;
+  border: 0;
+  background: #f1f5f6;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.ship-app .qty input {
+  width: 64px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  text-align: center;
+  box-shadow: none !important;
+  padding: 4px !important;
+}
+
+/* خريطة */
+.ship-app .map {
+  height: 420px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #dbe7ea;
+}
+
+.ship-app .map.sm { height: 300px; }
+
+/* أفاتار الطاقم */
+.ship-app .avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1a6b73, #14324c);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  flex: none;
+  overflow: hidden;
+}
+
+.ship-app .avatar img { width: 100%; height: 100%; object-fit: cover; }
+.ship-app .avatar.lg { width: 68px; height: 68px; font-size: 1.5rem; }
+
+.ship-app .person {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.ship-app .bar-split {
+  display: flex;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e5ecef;
+}
+
+.ship-app .bar-split i { display: block; height: 100%; }
+
+.ship-app .legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.ship-app .legend b {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-inline-end: 6px;
+  vertical-align: -1px;
+}
+
+.ship-app .kv {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 8px 14px;
+  font-size: 0.9rem;
+}
+
+.ship-app .kv dt { color: var(--muted); font-weight: 700; }
+.ship-app .kv dd { margin: 0; font-weight: 600; }
+
+.ship-app .ship-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.ship-app .ship-card.current {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(22, 122, 130, 0.14), var(--shadow);
+}
+
+.ship-app .hint {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--gold-soft);
+  color: #7a5a14;
+  font-size: 0.86rem;
+}
+
+.ship-app .readonly-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: #eef1f3;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+/* ───────── استجابة ───────── */
+
+@media (max-width: 1100px) {
+  .ship-app .g4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ship-app .g3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ship-app .g-main { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 960px) {
+  .ship-app {
+    grid-template-columns: 1fr;
+  }
+
+  .ship-app .rail {
+    position: fixed;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 290px;
+    transform: translateX(100%);
+    visibility: hidden;
+    transition: transform 0.25s var(--ease, ease), visibility 0s linear 0.25s;
+  }
+
+  .ship-app.rail-open .rail {
+    transform: none;
+    visibility: visible;
+    transition-delay: 0s;
+    box-shadow: -20px 0 50px rgba(0, 0, 0, 0.4);
+  }
+
+  .ship-app.rail-open .rail-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    border: 0;
+    background: rgba(10, 26, 43, 0.5);
+  }
+
+  .ship-app .rail-toggle {
+    display: inline-grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--navy);
+    cursor: pointer;
+  }
+
+  .ship-app .sbar { padding: 10px 16px; }
+  .ship-app .page { padding: 18px 14px 50px; }
+}
+
+@media (max-width: 720px) {
+  .ship-app .g2,
+  .ship-app .g3,
+  .ship-app .g4 { grid-template-columns: 1fr; }
+  .ship-app .kv { grid-template-columns: 1fr; }
+  .ship-app .page-head h1 { font-size: 1.3rem; }
+  .ship-app .sbar-ship small { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ship-app * { animation: none !important; transition: none !important; }
+}
+
+/* --------- ??? ???????? --------- */
+
+.ship-app .file-box {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  background: #f8fafb;
+  display: grid;
+  gap: 10px;
+}
+
+.ship-app .tbl.certs tr.row-empty td {
+  color: var(--muted);
+}
+
+.ship-app .tbl.certs tr.row-empty td b {
+  font-weight: 600;
+}
+
+.ship-app .ltr-text {
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: inline-block;
+}

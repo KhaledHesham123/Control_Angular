@@ -23,6 +23,31 @@ import { CategoryLookup } from './shared/category-lookup';
 import { CreateVessel } from './vessels/create-vessel';
 import { EditVessel } from './vessels/edit-vessel';
 import { VesselsList } from './vessels/vessels-list';
+import { ShipShell } from './ship/ship-shell';
+import { ShipIcon } from './ship/ui/ship-icon';
+import { ShipCatTree } from './ship/ui/ship-cat-tree';
+import { ShDashboard } from './ship/pages/sh-dashboard';
+import { ShReports } from './ship/pages/sh-reports';
+import { ShFleet } from './ship/pages/sh-fleet';
+import { ShParticulars } from './ship/pages/sh-particulars';
+import { ShRequests } from './ship/pages/sh-requests';
+import { ShRequestNew } from './ship/pages/sh-request-new';
+import { ShRequestDetail } from './ship/pages/sh-request-detail';
+import { ShStores } from './ship/pages/sh-stores';
+import { ShTanks } from './ship/pages/sh-tanks';
+import { ShDaily } from './ship/pages/sh-daily';
+import { ShLog } from './ship/pages/sh-log';
+import { ShVoyages } from './ship/pages/sh-voyages';
+import { ShPlanner } from './ship/pages/sh-planner';
+import { ShPorts } from './ship/pages/sh-ports';
+import { ShClients } from './ship/pages/sh-clients';
+import { ShCargo } from './ship/pages/sh-cargo';
+import { ShSuppliers } from './ship/pages/sh-suppliers';
+import { ShCatalog } from './ship/pages/sh-catalog';
+import { ShCrew } from './ship/pages/sh-crew';
+import { ShCertificates } from './ship/pages/sh-certificates';
+import { ShUsers } from './ship/pages/sh-users';
+import { ShSettings } from './ship/pages/sh-settings';
 
 @NgModule({
   declarations: [
@@ -37,6 +62,31 @@ import { VesselsList } from './vessels/vessels-list';
     VesselsList,
     CreateVessel,
     EditVessel,
+    ShipShell,
+    ShipIcon,
+    ShipCatTree,
+    ShDashboard,
+    ShReports,
+    ShFleet,
+    ShParticulars,
+    ShRequests,
+    ShRequestNew,
+    ShRequestDetail,
+    ShStores,
+    ShTanks,
+    ShDaily,
+    ShLog,
+    ShVoyages,
+    ShPlanner,
+    ShPorts,
+    ShClients,
+    ShCargo,
+    ShSuppliers,
+    ShCatalog,
+    ShCrew,
+    ShCertificates,
+    ShUsers,
+    ShSettings,
     CategoriesList,
     CreateCategory,
     EditCategory,

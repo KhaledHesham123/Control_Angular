@@ -15,11 +15,25 @@
 }
 
 .mast {
-  padding: 28px;
+  position: relative;
+  overflow: hidden;
+  padding: 34px 32px;
   color: #f7f3ea;
+  border-color: transparent;
   background:
     radial-gradient(circle at 100% 0%, rgba(212, 168, 87, 0.35), transparent 42%),
     linear-gradient(135deg, #0e2238 0%, #16324f 58%, #1a4f5c 100%);
+}
+
+.mast-art {
+  position: absolute;
+  inset-inline-end: -24px;
+  top: 50%;
+  width: 200px;
+  height: 200px;
+  color: rgba(240, 213, 154, 0.16);
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .eyebrow,
@@ -42,11 +56,12 @@ h2 {
 
 h1 {
   margin-top: 6px;
-  font-size: 2rem;
+  font-size: 2.1rem;
+  letter-spacing: -0.01em;
 }
 
 .lede {
-  margin-top: 10px;
+  margin-top: 8px;
   max-width: 460px;
   color: rgba(247, 243, 234, 0.78);
   line-height: 1.7;
@@ -54,55 +69,117 @@ h1 {
 
 .modules {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 16px;
-  margin-top: 18px;
+  margin-top: 20px;
 }
 
 .module {
+  position: relative;
+  overflow: hidden;
   display: grid;
   gap: 10px;
   align-content: start;
-  min-height: 180px;
+  min-height: 200px;
   padding: 22px;
   background: #fffdf9;
   color: inherit;
   text-align: start;
   font: inherit;
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: 0 1px 2px rgba(14, 34, 56, 0.04);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.module::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #d4a857, #1a6b73);
+  opacity: 0;
+  transition: opacity 0.2s ease;
 }
 
 .module:hover {
-  transform: translateY(-2px);
-  border-color: #1a6b73;
-  box-shadow: 0 12px 28px rgba(14, 34, 56, 0.08);
+  transform: translateY(-3px);
+  border-color: #c9d8df;
+  box-shadow: 0 18px 36px -18px rgba(14, 34, 56, 0.35);
+  filter: none;
+}
+
+.module:hover::before {
+  opacity: 1;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 4px;
+  border-radius: 14px;
+  color: #1a6b73;
+  background: #e7f1f2;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.module:hover .icon {
+  color: #f0d59a;
+  background: #14324c;
+}
+
+.icon svg,
+.go svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .module h2 {
-  font-size: 1.35rem;
+  font-size: 1.25rem;
   color: #14324c;
 }
 
 .module p {
   color: #667386;
   line-height: 1.65;
+  font-size: 0.93rem;
 }
 
 .go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-top: auto;
+  padding-top: 6px;
   color: #1a6b73;
   font-weight: 700;
 }
 
-@media (max-width: 900px) {
-  .modules {
-    grid-template-columns: 1fr 1fr;
-  }
+.go svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+  transition: transform 0.2s ease;
+}
+
+.module:hover .go svg {
+  transform: translateX(4px);
 }
 
 @media (max-width: 700px) {
-  .modules {
-    grid-template-columns: 1fr;
+  .mast {
+    padding: 26px 22px;
+  }
+
+  .mast-art {
+    width: 140px;
+    height: 140px;
   }
 }

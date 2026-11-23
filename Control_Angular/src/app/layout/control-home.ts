@@ -34,6 +34,11 @@ export class ControlHome implements OnInit {
       description: 'View vessels, details, create, edit, delete, and link users.',
       route: '/vessels',
     },
+    {
+      title: 'لوحة تحكم السفينة',
+      description: 'التوأم الرقمي، المخازن، الرحلات، الموردون، والشهادات.',
+      route: '/ship',
+    },
   ];
 
   ngOnInit(): void {

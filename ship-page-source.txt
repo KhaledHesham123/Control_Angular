@@ -1,0 +1,2765 @@
+﻿
+===== ship-overview.ts =====
+
+import { Component, inject } from '@angular/core';
+import { ShipBoardService } from './ship-board.service';
+import { MeterFilter, PowerSource, ShipMode, ShipTank, TankCategory } from './ship.model';
+
+@Component({
+  selector: 'app-ship-overview',
+  standalone: false,
+  templateUrl: './ship-overview.html',
+  styleUrls: ['./ship-board.css', './ship-twin-dashboard.css'],
+})
+export class ShipOverview {
+  readonly board = inject(ShipBoardService);
+  readonly radialLength = 2 * Math.PI * 26;
+  readonly today = new Date().toLocaleDateString('ar-EG', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  meterFilter: MeterFilter = 'food';
+  selectedZone = 'Bridge';
+
+  readonly gauges: { emoji: string; label: string; where: string; unit: string; category: TankCategory; color: string }[] = [
+    { emoji: '🔥', label: 'بنزين السفينة', where: 'تانكات الـ FUEL في قاع السفينة', unit: 'طن', category: 'hfo', color: '#f59e0b' },
+    { emoji: '⚡', label: 'ديزل السفينة', where: 'تانكات الديزل في قاع السفينة', unit: 'طن', category: 'mgo', color: '#0f6a56' },
+    { emoji: '🛢️', label: 'زيت المحركات', where: 'تانكات الزيت في غرفة المحركات', unit: 'طن', category: 'lube', color: '#eab308' },
+    { emoji: '💧', label: 'مياه الشرب', where: 'تانكات المياه العذبة', unit: 'طن', category: 'water', color: '#1d6f8a' },
+    { emoji: '🍱', label: 'الطعام والمؤن', where: 'مخازن الإعاشة والمطبخ', unit: 'كيلوجرام', category: 'food', color: '#9a3412' },
+  ];
+
+  readonly zones = [
+    { id: 'Bridge', label: 'غرفة القيادة', longLabel: 'غرفة القيادة والإعاشة (Bridge)', color: '#38bdf8' },
+    { id: 'Engine_Room', label: 'غرفة المحركات', longLabel: 'غرفة المحركات والمولدات والغلاية', color: '#22c55e' },
+    { id: 'Tanks', label: 'التانكات', longLabel: 'منطقة التانكات والصابورة والمياه', color: '#f59e0b' },
+    { id: 'Cargo_Hold_1', label: 'عنابر الشحن', longLabel: 'عنابر الشحن والمؤن (Cargo Holds)', color: '#ef4444' },
+    { id: 'Cranes', label: 'الأوناش', longLabel: 'الأوناش ومعدات السطح (Deck Cranes)', color: '#eab308' },
+  ];
+
+  readonly meterFilters: { id: MeterFilter; label: string }[] = [
+    { id: 'all', label: 'كل التانكات الظاهرة' },
+    { id: 'hfo', label: 'FUEL' },
+    { id: 'mgo', label: 'ديزل وزيت' },
+    { id: 'water', label: 'مياه وصابورة' },
+    { id: 'food', label: 'طعام ومؤن' },
+    { id: 'cargo', label: 'عنبر الشحن' },
+  ];
+
+  setMode(mode: ShipMode): void {
+    this.board.setMode(mode);
+  }
+
+  setPower(power: PowerSource): void {
+    this.board.setPower(power);
+  }
+
+  mainGenerators(): number {
+    return this.board.config().generators.filter((item) => item.role === 'main').length;
+  }
+
+  standbyGenerators(): number {
+    return this.board.config().generators.filter((item) => item.role !== 'main').length;
+  }
+
+  previewTanks(): ShipTank[] {
+    return this.board.tanks().filter((item) => {
+      if (this.meterFilter === 'all') return item.category !== 'cargo' && item.category !== 'ballast';
+      if (this.meterFilter === 'mgo') return item.category === 'mgo' || item.category === 'lube';
+      if (this.meterFilter === 'water') return item.category === 'water' || item.category === 'ballast';
+      return item.category === this.meterFilter;
+    });
+  }
+
+  tankUnit(tank: ShipTank): string {
+    return tank.unit === 'kg' ? 'كيلوجرام' : 'طن';
+  }
+
+  percent(item: ShipTank): number {
+    return Math.round((item.current / item.max) * 100);
+  }
+
+  barColor(category: TankCategory): string {
+    return this.gauges.find((item) => item.category === category)?.color ?? '#38bdf8';
+  }
+
+  daysBadgeClass(days: number): string {
+    if (days < 5) return 'days-badge danger';
+    if (days < 12) return 'days-badge warn';
+    return 'days-badge';
+  }
+
+  radialOffset(percent: number): number {
+    return this.radialLength * (1 - Math.max(0, Math.min(100, percent)) / 100);
+  }
+
+  selectZone(id: string): void {
+    this.selectedZone = id;
+    if (id === 'Cargo_Hold_1') this.meterFilter = 'cargo';
+    else if (id === 'Bridge') this.meterFilter = 'food';
+    else this.meterFilter = 'all';
+  }
+
+  twinNote(): string {
+    if (this.selectedZone === 'Cranes') return 'Gearless: مفيش أوناش على السفينة، التحميل بأوناش الميناء فوق العنبرين.';
+    if (this.selectedZone === 'Cargo_Hold_1') return 'عنبر واحد 52 × 12.6 × 8.275 م، فتحتان McGregor 25.15 × 12.57 م.';
+    if (this.selectedZone === 'Engine_Room') return 'MAK 6M551AK · 1470/2647 kW · 425 RPM · IF 380.';
+    if (this.selectedZone === 'Tanks') return 'تانكات القاع المزدوج تحت العنابر.';
+    if (this.selectedZone === 'Bridge') return 'الإقامة وغرفة القيادة في المؤخرة. بيانات هذا الجزء: مخازن الإعاشة والطعام.';
+    return 'MPP / Conbulker · فريتاون · 96.96 × 17.60 × غاطس 6.83 م';
+  }
+
+  zoneTitle(): string {
+    const zone = this.zones.find((item) => item.id === this.selectedZone);
+    return zone?.longLabel ?? 'السفينة';
+  }
+}
+
+===== ship-overview.html =====
+
+<div class="board-fit">
+<section class="voyage-status-strip">
+  <div class="status-notch-group">
+    <span class="status-notch">📅 اليوم: <b>{{ today }}</b></span>
+    <span class="status-notch">📍 الموقع: <b>{{ board.config().location }}</b></span>
+    <a class="status-notch coords" routerLink="/ship/route-map" title="عرض الإحداثيات على الخريطة">
+      🧭 الإحداثيات: <b>{{ board.config().latitude.toFixed(4) }}° N, {{ board.config().longitude.toFixed(4) }}° E</b>
+    </a>
+    <span class="status-notch">⚙️ المولدات: <b>{{ mainGenerators() }} أساسي + {{ standbyGenerators() }} احتياطي</b></span>
+    <span class="status-notch">👨‍✈️ الطاقم: <b>{{ board.config().crewCount }} فرد</b></span>
+  </div>
+  <div class="status-notch-group">
+    <div class="mode-switch-group">
+      <button type="button" class="mode-btn" [class.active-sea]="board.config().mode === 'sea'" (click)="setMode('sea')">إبحار · FUEL</button>
+      <button type="button" class="mode-btn" [class.active-port]="board.config().mode === 'port'" (click)="setMode('port')">⚓ ميناء (ديزل MGO)</button>
+    </div>
+    <div class="mode-switch-group">
+      <button type="button" class="mode-btn" [class.active-pwr]="board.config().powerSupplyMode === 'aux_gen'" (click)="setPower('aux_gen')">⚙️ مولدات الديزل</button>
+      <button type="button" class="mode-btn" [class.active-pwr]="board.config().powerSupplyMode === 'shaft_gen'" (click)="setPower('shaft_gen')">🔄 مع المحرك (Shaft Gen)</button>
+      <button type="button" class="mode-btn" [class.active-pwr]="board.config().powerSupplyMode === 'shore_power'" (click)="setPower('shore_power')">🔌 سلك كهرباء الميناء</button>
+    </div>
+  </div>
+</section>
+
+<section class="master-gauges-grid" aria-label="العدادات الإجمالية">
+  @for (item of gauges; track item.category) {
+    @let gauge = board.gauge(item.category);
+    <article class="gauge-card">
+      <div class="gauge-info">
+        <h4>{{ item.emoji }} {{ item.label }}</h4>
+        <p class="gauge-where">المكان: {{ item.where }}</p>
+        <div class="gauge-val">
+          {{ gauge.current.toFixed(item.category === 'food' ? 0 : 1) }}
+          <small>{{ item.unit }} موجود الآن</small>
+        </div>
+        <p class="gauge-line"><span>سعة هذه التانكات مجتمعة</span><b>{{ gauge.max }} {{ item.unit }}</b></p>
+        <p class="gauge-line"><span>ما يُستهلك في اليوم</span><b>{{ gauge.note }}</b></p>
+        <span [class]="daysBadgeClass(gauge.days)">الكمية الحالية تكفي حوالي {{ gauge.days.toFixed(1) }} يوم</span>
+      </div>
+      <div class="radial-wrap" aria-hidden="true">
+        <svg viewBox="0 0 62 62">
+          <circle class="radial-bg" cx="31" cy="31" r="26" />
+          <circle
+            class="radial-prog"
+            cx="31"
+            cy="31"
+            r="26"
+            [attr.stroke]="item.color"
+            [attr.stroke-dasharray]="radialLength"
+            [attr.stroke-dashoffset]="radialOffset(gauge.percent)"
+          />
+        </svg>
+        <div class="radial-text">{{ gauge.percent | number: '1.0-0' }}%</div>
+      </div>
+    </article>
+  }
+</section>
+
+<section class="twin-stage">
+  <aside class="parts-pane">
+    <header>
+      <h3>أجزاء السفينة</h3>
+      <p>اضغط الجزء وتطلع بياناته</p>
+    </header>
+    @for (zone of zones; track zone.id) {
+      <button type="button" class="part" [class.selected]="selectedZone === zone.id" (click)="selectZone(zone.id)">
+        <i [style.background]="zone.color"></i>
+        <span>
+          <b>{{ zone.label }}</b>
+          <small>{{ zone.longLabel }}</small>
+        </span>
+      </button>
+    }
+    <article class="part-data">
+      <p>الجزء المفتوح</p>
+      <h4>{{ zoneTitle() }}</h4>
+      <p class="part-note">{{ twinNote() }}</p>
+      @for (tank of previewTanks(); track tank.id) {
+        <div class="part-meter">
+          <div>
+            <b>{{ tank.name }}</b>
+            <span>{{ percent(tank) }}%</span>
+          </div>
+          <i><b [style.width.%]="percent(tank)" [style.background]="barColor(tank.category)"></b></i>
+          <small>الموجود {{ tank.current.toFixed(1) }} {{ tankUnit(tank) }} من {{ tank.max }} {{ tankUnit(tank) }}</small>
+        </div>
+      }
+      <a [routerLink]="['/ship/operations']" [queryParams]="{ zone: selectedZone }">عمليات هذا الجزء وقطع غياره</a>
+    </article>
+  </aside>
+</section>
+</div>
+
+===== ship-shell.ts =====
+
+import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Title } from '@angular/platform-browser';
+import { NavigationEnd, Router } from '@angular/router';
+import { filter } from 'rxjs';
+import { ShipBoardService } from './ship-board.service';
+import { SHIP_NAV, SHIP_ROLES, ShipNavSection, ShipRole, ShipTank } from './ship.model';
+
+interface BunkerSupplier {
+  company: string;
+  port: string;
+  prices: string;
+  supply: string;
+  subtype: string;
+}
+
+interface MateRow {
+  label: string;
+  value: string;
+}
+
+interface MatePanel {
+  kicker: string;
+  title: string;
+  route: string;
+  link: string;
+  rows: MateRow[];
+}
+
+@Component({
+  selector: 'app-ship-shell',
+  standalone: false,
+  templateUrl: './ship-shell.html',
+  styleUrls: ['./ship-board.css', './ship-twin-dashboard.css'],
+})
+export class ShipShell implements OnInit {
+  readonly board = inject(ShipBoardService);
+  readonly roles = SHIP_ROLES;
+  readonly nav = SHIP_NAV;
+  private readonly title = inject(Title);
+  private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
+
+  menuOpen = false;
+  readonly path = signal(this.router.url.split('?')[0]);
+  bunkerOpen = false;
+  bunkerTankId = '';
+  bunkerQty = 40;
+  bunkerSupply = 'Fuel HFO';
+  bunkerSubtype = 'VLSFO 0.5% / HFO 380';
+  bunkerSupplierPick = '0';
+  bunkerSupplier = 'مصر للبترول للتموين البحري (Misr Petroleum Marine)';
+  bunkerPort = 'ميناء الإسكندرية / دمياط / السويس - مصر';
+  bunkerInvoice = 'BNK-2026-205';
+  bunkerCost = 32500;
+  bunkerDate = new Date().toISOString().slice(0, 10);
+  bunkerPrices = 'VLSFO: $545/MT | MGO: $785/MT';
+
+  readonly bunkerSuppliers: BunkerSupplier[] = [
+    { company: 'مصر للبترول للتموين البحري (Misr Petroleum Marine)', port: 'ميناء الإسكندرية / دمياط / السويس - مصر', prices: 'VLSFO: $545/MT | MGO: $785/MT', supply: 'Fuel HFO', subtype: 'VLSFO 0.5% / HFO 380' },
+    { company: 'Minerva Bunkering Med', port: 'ميناء بيرايوس - اليونان', prices: 'HFO 380: $495/MT | MGO DMA: $760/MT', supply: 'Fuel HFO', subtype: 'HFO 380' },
+    { company: 'Shell / Vivo Marine Bunkers', port: 'ميناء روتردام - هولندا', prices: 'Cylinder Oil SAE50: $2,150/MT | VLSFO: $520/MT', supply: 'Lube Oil', subtype: 'Cylinder Oil SAE50' },
+    { company: 'الأهرام لتموين السفن (Al-Ahram Ship Chandlers)', port: 'ميناء دمياط والإسكندرية - مصر', prices: 'تموين غذائي شامل جاف ومبرد', supply: 'Provisions', subtype: 'مؤن جافة ومجمدات' },
+    { company: 'التوكيلات الملاحية المصرية وقناة السويس', port: 'ميناء بورسعيد / دمياط - مصر', prices: 'مياه عذبة: $5.5/طن', supply: 'Fresh Water', subtype: 'مياه شرب عذبة' },
+  ];
+
+  ngOnInit(): void {
+    this.title.setTitle('لوحة تحكم السفينة | Ship Dashboard');
+    this.syncBunker(this.router.url);
+    this.router.events.pipe(
+      filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe((event) => this.syncBunker(event.urlAfterRedirects));
+  }
+
+  visibleSections(): ShipNavSection[] {
+    const role = this.board.role();
+    return this.nav
+      .filter((section) => section.roles.includes(role))
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => item.roles.includes(role)),
+      }))
+      .filter((section) => section.items.length > 0);
+  }
+
+  onRole(value: string): void {
+    this.board.setRole(value as ShipRole);
+  }
+
+  supplyTanks(): ShipTank[] {
+    return this.board.tanks().filter((item) => item.category !== 'cargo');
+  }
+
+  tankCaption(tank: ShipTank): string {
+    const names: Record<string, string> = {
+      hfo1: 'تانك بنزين 1 · FUEL',
+      hfo2: 'تانك بنزين 2 · FUEL',
+      hfo3: 'تانك بنزين 3 · FUEL',
+      hfo4: 'تانك خدمة البنزين · FUEL',
+      mgo1: 'تانك ديزل رقم 1',
+      mgo2: 'تانك ديزل رقم 2',
+      mgo3: 'تانك ديزل رقم 3',
+      lube1: 'تانك الزيت الرئيسي',
+      lube2: 'تانك الزيت الاحتياطي',
+      fw1: 'تانك مياه الشرب 1',
+      fw2: 'تانك مياه الشرب 2',
+      wbt1: 'تانك صابورة 1',
+      wbt2: 'تانك صابورة 2',
+      food1: 'مخزن المؤن الجافة',
+      food2: 'مخزن المجمدات',
+      food3: 'خضروات وألبان',
+    };
+    const unit = tank.unit === 'kg' ? 'كجم' : 'طن';
+    return `${names[tank.id] ?? tank.name} (الحالي: ${tank.current} / الأقصى: ${tank.max} ${unit})`;
+  }
+
+  selectedTank(): ShipTank | undefined {
+    return this.supplyTanks().find((item) => item.id === this.bunkerTankId) ?? this.supplyTanks()[0];
+  }
+
+  unitLabel(): string {
+    return this.selectedTank()?.unit === 'kg' ? 'كجم' : 'طن';
+  }
+
+  afterBunker(): string {
+    const tank = this.selectedTank();
+    if (!tank) return '';
+    const next = Math.min(tank.max, tank.current + (Number(this.bunkerQty) || 0));
+    return `الرصيد بعد التزويد سيصبح: ${next.toFixed(1)} من ${tank.max} ${this.unitLabel()}`;
+  }
+
+  onTankChange(): void {
+    const tank = this.selectedTank();
+    if (!tank) return;
+    const room = Math.max(0, tank.max - tank.current);
+    this.bunkerQty = Math.min(tank.category === 'food' ? 200 : 40, room || 10);
+    if (tank.category === 'hfo') {
+      this.bunkerSupply = 'Fuel HFO';
+      this.bunkerSubtype = 'VLSFO 0.5% / HFO 380';
+    } else if (tank.category === 'mgo') {
+      this.bunkerSupply = 'Fuel MGO';
+      this.bunkerSubtype = 'MGO DMA';
+    } else if (tank.category === 'lube') {
+      this.bunkerSupply = 'Lube Oil';
+      this.bunkerSubtype = 'Cylinder Oil SAE50';
+    } else if (tank.category === 'water' || tank.category === 'ballast') {
+      this.bunkerSupply = 'Fresh Water';
+      this.bunkerSubtype = 'مياه شرب عذبة';
+    } else {
+      this.bunkerSupply = 'Provisions';
+      this.bunkerSubtype = 'مؤن جافة ومجمدات';
+    }
+  }
+
+  onSupplierChange(): void {
+    const supplier = this.bunkerSuppliers[Number(this.bunkerSupplierPick)];
+    if (!supplier) return;
+    this.bunkerSupplier = supplier.company;
+    this.bunkerPort = supplier.port;
+    this.bunkerPrices = supplier.prices;
+    this.bunkerSupply = supplier.supply;
+    this.bunkerSubtype = supplier.subtype;
+  }
+
+  saveBunker(): void {
+    const tank = this.selectedTank();
+    if (!tank) return;
+    this.board.bunkering(tank.id, Number(this.bunkerQty) || 0, this.bunkerSupplier, this.bunkerPort);
+    this.closeBunker();
+  }
+
+  closeBunker(): void {
+    this.bunkerOpen = false;
+    if (this.router.url.includes('/bunkering')) {
+      void this.router.navigateByUrl('/ship');
+    }
+  }
+
+  mate(): MatePanel | null {
+    const path = this.path();
+    const ship = this.board.vessel();
+    const voyages = this.board.voyages();
+    const freight = voyages.reduce((sum, item) => sum + (item.freightRevenue || 0), 0);
+    const lowTanks = this.board.tanks().filter((tank) => tank.max > 0 && tank.current / tank.max < 0.35).length;
+    const money = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(freight);
+    const specs: MateRow[] = [
+      { label: 'النوع', value: ship.type },
+      { label: 'العلم', value: ship.flag },
+      { label: 'الحمولة الساكنة', value: `${ship.dwt.toLocaleString('en-US')} MT` },
+      { label: 'الحمولة الكلية', value: `${ship.gt.toLocaleString('en-US')} GT` },
+    ];
+    const voyageRows: MateRow[] = [
+      { label: 'الرحلات', value: String(voyages.length) },
+      { label: 'محطات الموانئ', value: String(this.board.portCalls().length) },
+      { label: 'نولون مسجّل', value: `$${money}` },
+    ];
+    const panels: Record<string, MatePanel> = {
+      '/ship/fleet': { kicker: 'مرتبط بالأسطول', title: 'مواصفات السفينة المختارة', route: '/ship/particulars', link: 'فتح بطاقات المواصفات', rows: specs },
+      '/ship/particulars': { kicker: 'مرتبط بالمواصفات', title: 'دليل الأسطول', route: '/ship/fleet', link: 'فتح كل السفن', rows: [{ label: 'السفن المسجلة', value: String(this.board.fleet().length) }, { label: 'السفينة الحالية', value: ship.name }, { label: 'IMO', value: ship.imo }] },
+      '/ship/voyage': { kicker: 'مرتبط بالرحلة', title: 'العملاء والنولون', route: '/ship/clients', link: 'فتح العملاء والشحنات', rows: voyageRows },
+      '/ship/route-map': { kicker: 'مرتبط بالمسار', title: 'الرحلات وحسابات الموانئ', route: '/ship/voyage', link: 'فتح الرحلات', rows: voyageRows },
+      '/ship/clients': { kicker: 'مرتبط بالشحنة', title: 'الرحلات وخط السير', route: '/ship/voyage', link: 'فتح الرحلات', rows: voyageRows },
+      '/ship/cargo': { kicker: 'مرتبط بالعنابر', title: 'الرحلات والحمولة', route: '/ship/voyage', link: 'فتح الرحلات', rows: voyageRows },
+      '/ship/inventory': { kicker: 'مرتبط بالمخزن', title: 'الصيانة وقطع الغيار', route: '/ship/maintenance', link: 'فتح الصيانة', rows: [{ label: 'تانكات تحت 35%', value: String(lowTanks) }, { label: 'السفينة', value: ship.name }] },
+      '/ship/maintenance': { kicker: 'مرتبط بالصيانة', title: 'مخازن السفينة والجرد', route: '/ship/inventory', link: 'فتح المخازن', rows: [{ label: 'تانكات تحت 35%', value: String(lowTanks) }, { label: 'التقارير اليومية', value: String(this.board.logs().length) }] },
+      '/ship/operations': { kicker: 'مرتبط بالعمليات', title: 'الصيانة وقطع الغيار', route: '/ship/maintenance', link: 'فتح الصيانة', rows: [{ label: 'السفينة', value: ship.name }, { label: 'التقارير', value: String(this.board.logs().length) }] },
+      '/ship/crew': { kicker: 'مرتبط بالطاقم', title: 'الشهادات والتأمين', route: '/ship/certificates', link: 'فتح الشهادات', rows: [{ label: 'أفراد الطاقم', value: String(this.board.config().crewCount) }, { label: 'الشهادات', value: String(this.board.certificates().length) }] },
+      '/ship/certificates': { kicker: 'مرتبط بالشهادات', title: 'طاقم السفينة', route: '/ship/crew', link: 'فتح الطاقم', rows: [{ label: 'أفراد الطاقم', value: String(this.board.config().crewCount) }, { label: 'الشهادات', value: String(this.board.certificates().length) }] },
+      '/ship/users': { kicker: 'مرتبط بالصلاحيات', title: 'طاقم السفينة', route: '/ship/crew', link: 'فتح الطاقم', rows: [{ label: 'الصلاحية الحالية', value: this.board.role() }, { label: 'الطاقم', value: String(this.board.config().crewCount) }] },
+      '/ship/suppliers': { kicker: 'مرتبط بالموردين', title: 'دليل موانئ العالم', route: '/ship/ports', link: 'فتح الموانئ', rows: [{ label: 'محطات مسجلة', value: String(this.board.portCalls().length) }, { label: 'الموقع', value: this.board.config().location }] },
+      '/ship/ports': { kicker: 'مرتبط بالموانئ', title: 'الوكلاء والموردون', route: '/ship/suppliers', link: 'فتح الموردين', rows: [{ label: 'محطات مسجلة', value: String(this.board.portCalls().length) }, { label: 'الموقع', value: this.board.config().location }] },
+      '/ship/report': { kicker: 'مرتبط بالاستهلاك', title: 'تزويد الوقود والمؤن', route: '/ship/bunkering', link: 'فتح التزويد', rows: [{ label: 'تقارير محفوظة', value: String(this.board.logs().length) }, { label: 'تانكات تحت 35%', value: String(lowTanks) }] },
+      '/ship/bunkering': { kicker: 'مرتبط بالتزويد', title: 'التقرير اليومي', route: '/ship/report', link: 'فتح التقرير اليومي', rows: [{ label: 'تقارير محفوظة', value: String(this.board.logs().length) }, { label: 'الطاقم', value: String(this.board.config().crewCount) }] },
+      '/ship/settings': { kicker: 'مرتبط بالأرقام', title: 'التقرير اليومي', route: '/ship/report', link: 'فتح التقرير اليومي', rows: [{ label: 'المولدات', value: String(this.board.config().generators.length) }, { label: 'الطاقم', value: String(this.board.config().crewCount) }] },
+      '/ship/tanks': { kicker: 'مرتبط بالتانكات', title: 'مخازن السفينة', route: '/ship/inventory', link: 'فتح المخازن', rows: [{ label: 'تانكات تحت 35%', value: String(lowTanks) }, { label: 'السفينة', value: ship.name }] },
+    };
+    if (path === '/ship') {
+      return { kicker: 'مرتبط باللوحة', title: 'وصف السفينة والتأجير', route: '/ship/particulars', link: 'فتح مواصفات السفينة', rows: specs };
+    }
+    return panels[path] ?? null;
+  }
+
+  private syncBunker(url: string): void {
+    this.path.set(url.split('?')[0]);
+    const open = url.includes('/ship/bunkering');
+    if (open && !this.bunkerOpen) this.resetBunker();
+    this.bunkerOpen = open;
+  }
+
+  private resetBunker(): void {
+    const first = this.supplyTanks().find((item) => item.category === 'hfo') ?? this.supplyTanks()[0];
+    this.bunkerTankId = first?.id ?? '';
+    this.bunkerSupplierPick = '0';
+    this.bunkerInvoice = 'BNK-2026-205';
+    this.bunkerCost = 32500;
+    this.bunkerDate = new Date().toISOString().slice(0, 10);
+    this.onTankChange();
+    this.onSupplierChange();
+  }
+}
+
+
+===== ship-shell.html =====
+
+<section class="desk twin-dash" [class.menu-open]="menuOpen" dir="rtl" lang="ar">
+  @if (menuOpen) {
+    <div class="drawer-backdrop" (click)="menuOpen = false"></div>
+  }
+  <aside class="rail" [class.open]="menuOpen">
+    <header class="rail-brand">
+      <div class="rail-mark" aria-hidden="true">AQ</div>
+      <div>
+        <p>{{ board.vessel().name }}</p>
+        <h2>لوحة التشغيل</h2>
+      </div>
+      <button type="button" class="close" (click)="menuOpen = false" aria-label="إغلاق">✕</button>
+    </header>
+    <div class="rail-meta">
+      <span>سفينة #{{ board.vesselId() }}</span>
+      <b class="role">{{ board.role() }}</b>
+    </div>
+    <nav class="rail-nav">
+      @for (section of visibleSections(); track section.title) {
+        <section class="rail-group">
+          <h3><i>{{ section.icon }}</i>{{ section.title }}</h3>
+          <div class="rail-links">
+            @for (item of section.items; track item.route) {
+              <a [routerLink]="item.route" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: !!item.exact }" (click)="menuOpen = false">
+                <span>{{ item.icon }}</span>
+                {{ item.label }}
+              </a>
+            }
+          </div>
+        </section>
+      }
+    </nav>
+    <a class="rail-back" routerLink="/">مركز التحكم</a>
+  </aside>
+
+  <div class="stage">
+    <header class="stage-bar">
+      <button type="button" class="rail-toggle" (click)="menuOpen = !menuOpen">{{ menuOpen ? 'إخفاء الأقسام' : 'الأقسام' }}</button>
+      <div class="stage-title">
+        <p>IMO {{ board.vessel().imo }} · {{ board.vessel().type }} · {{ board.vessel().flag }}</p>
+        <h2>{{ board.vessel().name }}</h2>
+      </div>
+      <label class="stage-field">
+        <span>الصلاحية</span>
+        <select [value]="board.role()" (change)="onRole($any($event.target).value)">
+          @for (role of roles; track role.id) {
+            <option [value]="role.id">{{ role.label }}</option>
+          }
+        </select>
+      </label>
+    </header>
+
+    @if (bunkerOpen) {
+    <div class="bunker-backdrop" (click)="closeBunker()"></div>
+    <section class="bunker-modal" role="dialog" aria-modal="true" aria-labelledby="bunker-title">
+      <header class="bunker-head">
+        <button type="button" class="bunker-close" (click)="closeBunker()" aria-label="إغلاق">✕</button>
+        <h3 id="bunker-title">تسجيل عملية تزويد جديدة للسفينة الحالية (Bunkering) ⛽</h3>
+      </header>
+      <div class="bunker-grid">
+        <label>
+          <span>التانك أو المخزن المستلم للتزويد</span>
+          <select [value]="bunkerTankId" (change)="bunkerTankId = $any($event.target).value; onTankChange()">
+            @for (tank of supplyTanks(); track tank.id) {
+              <option [value]="tank.id">{{ tankCaption(tank) }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          <span>نوع الإمداد (Supply Type)</span>
+          <input [value]="bunkerSupply" (input)="bunkerSupply = $any($event.target).value" />
+        </label>
+        <label>
+          <span>الصنف الفرعي</span>
+          <input [value]="bunkerSubtype" (input)="bunkerSubtype = $any($event.target).value" />
+        </label>
+        <label>
+          <span>الكمية المضافة ({{ unitLabel() }})</span>
+          <input type="number" min="0" [value]="bunkerQty" (input)="bunkerQty = +$any($event.target).value" />
+          <small>{{ afterBunker() }}</small>
+        </label>
+        <label class="span-2">
+          <span>المورد من الدليل المعتمد</span>
+          <select [value]="bunkerSupplierPick" (change)="bunkerSupplierPick = $any($event.target).value; onSupplierChange()">
+            @for (supplier of bunkerSuppliers; track supplier.company; let index = $index) {
+              <option [value]="index">★ {{ supplier.company }}</option>
+            }
+          </select>
+          <small class="price">استرشادي: {{ bunkerPrices }}</small>
+        </label>
+        <label>
+          <span>المورد / شركة التزويد</span>
+          <input [value]="bunkerSupplier" (input)="bunkerSupplier = $any($event.target).value" />
+        </label>
+        <label>
+          <span>ميناء التزويد (Port of Supply)</span>
+          <input [value]="bunkerPort" (input)="bunkerPort = $any($event.target).value" />
+        </label>
+        <label>
+          <span>رقم الفاتورة / الإيصال</span>
+          <input [value]="bunkerInvoice" (input)="bunkerInvoice = $any($event.target).value" />
+        </label>
+        <label>
+          <span>التكلفة الإجمالية (USD $)</span>
+          <input type="number" min="0" [value]="bunkerCost" (input)="bunkerCost = +$any($event.target).value" />
+        </label>
+        <label class="span-2">
+          <span>تاريخ عملية التزويد</span>
+          <input type="date" [value]="bunkerDate" (input)="bunkerDate = $any($event.target).value" />
+        </label>
+      </div>
+      <button type="button" class="bunker-save" (click)="saveBunker()">حفظ عملية التزويد في قاعدة البيانات وزيادة رصيد التانك فوراً ⛽</button>
+    </section>
+    }
+
+    <div class="stage-body">
+      <div class="stage-main">
+        @if (board.notice()) {
+          <div class="banner" role="status">{{ board.notice() }}</div>
+        }
+        <router-outlet />
+      </div>
+      @if (mate(); as related) {
+        <aside class="mate">
+          <p>{{ related.kicker }}</p>
+          <h3>{{ related.title }}</h3>
+          @for (row of related.rows; track row.label) {
+            <div class="mate-row">
+              <span>{{ row.label }}</span>
+              <b>{{ row.value }}</b>
+            </div>
+          }
+          <a [routerLink]="related.route">{{ related.link }}</a>
+        </aside>
+      }
+    </div>
+  </div>
+</section>
+
+===== ship-board.service.ts =====
+
+import { Injectable, computed, signal } from '@angular/core';
+import {
+  DailyLog,
+  FLEET,
+  GaugeSummary,
+  PowerSource,
+  ShipCertificate,
+  ShipConfig,
+  ShipMode,
+  ShipProfile,
+  ShipRole,
+  ShipTank,
+  ShipVoyageRecord,
+  PortCall,
+  TankCategory,
+  defaultCertificates,
+  defaultConfig,
+  defaultPortCalls,
+  defaultTanks,
+  defaultVoyages,
+} from './ship.model';
+
+@Injectable({ providedIn: 'root' })
+export class ShipBoardService {
+  readonly fleet = signal<ShipProfile[]>(FLEET.map((ship) => ({ ...ship })));
+  readonly vesselId = signal('11');
+  readonly role = signal<ShipRole>('Admin');
+  readonly tanks = signal<ShipTank[]>(defaultTanks());
+  readonly config = signal<ShipConfig>(defaultConfig());
+  readonly certificates = signal<ShipCertificate[]>(defaultCertificates());
+  readonly flag = signal('SIERRA LEONE');
+  readonly logs = signal<DailyLog[]>([]);
+  readonly voyages = signal<ShipVoyageRecord[]>(defaultVoyages());
+  readonly portCalls = signal<PortCall[]>(defaultPortCalls());
+  readonly notice = signal<string | null>(null);
+
+  readonly vessel = computed(
+    () => this.fleet().find((item) => item.id === this.vesselId()) ?? this.fleet()[0],
+  );
+
+  selectVessel(id: string): void {
+    this.vesselId.set(id);
+    this.notice.set(null);
+  }
+
+  addShip(ship: Omit<ShipProfile, 'id'>): string {
+    const id = String(Math.max(0, ...this.fleet().map((item) => Number(item.id) || 0)) + 1);
+    this.fleet.update((items) => [...items, { ...ship, id }]);
+    this.vesselId.set(id);
+    this.notice.set('تم حفظ السفينة.');
+    return id;
+  }
+
+  restoreFleet(): void {
+    this.fleet.set(FLEET.map((ship) => ({ ...ship })));
+    this.vesselId.set(FLEET[0].id);
+    this.notice.set('تم تحديث بيانات الأسطول القياسية بنجاح');
+  }
+
+  setRole(role: ShipRole): void {
+    this.role.set(role);
+  }
+
+  setMode(mode: ShipMode): void {
+    this.config.update((config) => ({ ...config, mode }));
+  }
+
+  setPower(powerSupplyMode: PowerSource): void {
+    this.config.update((config) => ({ ...config, powerSupplyMode }));
+  }
+
+  gauge(category: TankCategory): GaugeSummary {
+    const tanks = this.tanks().filter((item) => item.category === category);
+    const current = tanks.reduce((sum, item) => sum + item.current, 0);
+    const max = tanks.reduce((sum, item) => sum + item.max, 0) || 1;
+    const daily = this.dailyUse(category);
+    const days = current / Math.max(daily, 0.05);
+    return {
+      current,
+      max,
+      percent: Math.max(0, Math.min(100, (current / max) * 100)),
+      daily,
+      days,
+      unit: tanks[0]?.unit ?? '',
+      note: this.dailyNote(category, daily),
+    };
+  }
+
+  bunkering(tankId: string, quantity: number, supplier: string, port: string): void {
+    const added = Math.max(0, quantity);
+    this.tanks.update((items) =>
+      items.map((item) =>
+        item.id === tankId ? { ...item, current: Math.min(item.max, item.current + added) } : item,
+      ),
+    );
+    this.notice.set(`تم حفظ عملية التزويد وزيادة رصيد التانك. ${supplier || ''} · ${port || ''}`);
+  }
+
+  saveBalances(values: Record<string, number>): void {
+    this.tanks.update((items) =>
+      items.map((item) => {
+        const next = values[item.id];
+        if (next == null || Number.isNaN(next)) {
+          return item;
+        }
+        return { ...item, current: Math.max(0, Math.min(item.max, next)) };
+      }),
+    );
+    this.notice.set('Tank balances saved.');
+  }
+
+  saveConfig(config: ShipConfig): void {
+    this.config.set({
+      ...config,
+      crewCount: Math.max(1, config.crewCount),
+      generators: config.generators.map((item) => ({ ...item })),
+    });
+    this.notice.set('Ship settings saved.');
+  }
+
+  submitReport(input: {
+    date: string;
+    location: string;
+    mode: ShipMode;
+    power: PowerSource;
+    hoursMainHfo: number;
+    hoursMainMgo: number;
+    hoursBoiler: number;
+    hoursLube: number;
+    generatorHours: number[];
+  }): DailyLog {
+    const config = this.config();
+    const genMgo = input.generatorHours.reduce(
+      (sum, hours, index) => sum + hours * (config.generators[index]?.rateTonsPerHour ?? 0),
+      0,
+    );
+    const hfo = input.hoursMainHfo * config.hfoTonsPerHourSea;
+    const mgo =
+      input.hoursMainMgo * config.meMgoTonsPerHourPort +
+      genMgo +
+      input.hoursBoiler * config.boilerMgoTonsPerHour;
+    const lube = input.hoursLube * config.lubeTonsPerHour;
+    const water = (config.crewCount * config.waterLitersPerPersonDay) / 1000 + input.hoursBoiler * 0.03;
+    const food = config.crewCount * config.foodKgPerPersonDay;
+
+    this.deduct('hfo', hfo);
+    this.deduct('mgo', mgo);
+    this.deduct('lube', lube);
+    this.deduct('water', water);
+    this.deduct('food', food);
+    this.config.update((current) => ({ ...current, mode: input.mode, powerSupplyMode: input.power, location: input.location }));
+
+    const log: DailyLog = { date: input.date, location: input.location, hfo, mgo, lube, water, food };
+    this.logs.update((items) => [log, ...items]);
+    this.notice.set('Daily report saved and consumption deducted.');
+    return log;
+  }
+
+  saveVoyage(value: ShipVoyageRecord): void {
+    const voyageNumber = value.voyageNumber.trim();
+    const voyageTitle = value.voyageTitle.trim();
+    if (!voyageNumber || !voyageTitle) {
+      return;
+    }
+    const saved = { ...value, voyageNumber, voyageTitle };
+    if (saved.voyageId) {
+      this.voyages.update((items) => items.map((item) => (item.voyageId === saved.voyageId ? saved : item)));
+      this.portCalls.update((items) =>
+        items.map((item) => (item.voyageId === saved.voyageId ? { ...item, voyageNumber } : item)),
+      );
+    } else {
+      const voyageId = Math.max(0, ...this.voyages().map((item) => item.voyageId)) + 1;
+      this.voyages.update((items) => [{ ...saved, voyageId }, ...items]);
+    }
+    this.notice.set('تم حفظ الرحلة وخط السير.');
+  }
+
+  savePortCall(value: PortCall): void {
+    const portName = value.portName.trim();
+    if (!portName) {
+      return;
+    }
+    const voyage = this.voyages().find((item) => item.voyageId === value.voyageId);
+    const saved = { ...value, portName, voyageNumber: voyage?.voyageNumber ?? value.voyageNumber };
+    if (saved.portCallId) {
+      this.portCalls.update((items) => items.map((item) => (item.portCallId === saved.portCallId ? saved : item)));
+    } else {
+      const portCallId = Math.max(0, ...this.portCalls().map((item) => item.portCallId)) + 1;
+      this.portCalls.update((items) => [...items, { ...saved, portCallId }]);
+    }
+    this.notice.set('تم حفظ محطة الميناء ورسوم الـ DA.');
+  }
+
+  deletePortCall(portCallId: number): void {
+    this.portCalls.update((items) => items.filter((item) => item.portCallId !== portCallId));
+    this.notice.set('تم حذف المحطة من خط السير.');
+  }
+
+  moveTo(lat: number, lng: number, location: string): void {
+    this.config.update((config) => ({ ...config, latitude: lat, longitude: lng, location }));
+    this.notice.set('Ship position updated.');
+  }
+
+  addCertificate(value: Omit<ShipCertificate, 'id'>): void {
+    this.certificates.update((items) => [{ ...value, id: crypto.randomUUID() }, ...items]);
+    this.notice.set('Certificate saved.');
+  }
+
+  setFlag(flag: string): void {
+    this.flag.set(flag.trim() || this.flag());
+    this.notice.set('Flag state updated.');
+  }
+
+  clearNotice(): void {
+    this.notice.set(null);
+  }
+
+  private deduct(category: TankCategory, amount: number): void {
+    let left = amount;
+    this.tanks.update((items) =>
+      items.map((item) => {
+        if (item.category !== category || left <= 0 || item.current <= 0) {
+          return item;
+        }
+        const used = Math.min(item.current, left);
+        left -= used;
+        return { ...item, current: item.current - used };
+      }),
+    );
+  }
+
+  private dailyUse(category: TankCategory): number {
+    const config = this.config();
+    const genDaily =
+      config.powerSupplyMode === 'aux_gen'
+        ? config.generators.reduce((sum, item) => sum + item.rateTonsPerHour * item.defaultHours, 0)
+        : 0;
+    if (category === 'hfo') {
+      return config.mode === 'sea' ? config.hfoTonsPerHourSea * 24 : 0.1;
+    }
+    if (category === 'mgo') {
+      const boiler = config.boilerMgoTonsPerHour * (config.mode === 'sea' ? config.boilerHoursSea : config.boilerHoursPort);
+      const maneuver = config.mode === 'port' ? config.meMgoTonsPerHourPort * 24 : 0;
+      return genDaily + boiler + maneuver;
+    }
+    if (category === 'lube') {
+      return config.lubeTonsPerHour * (config.mode === 'sea' ? 24 : 12);
+    }
+    if (category === 'water') {
+      return (config.crewCount * config.waterLitersPerPersonDay) / 1000 + 0.4;
+    }
+    if (category === 'food') {
+      return config.crewCount * config.foodKgPerPersonDay;
+    }
+    return 1;
+  }
+
+  private dailyNote(category: TankCategory, daily: number): string {
+    const unit = category === 'food' ? 'كيلوجرام' : 'طن';
+    if (category === 'hfo' && this.config().mode === 'port') {
+      return 'المحرك الرئيسي واقف في الميناء، والاستهلاك شبه متوقف';
+    }
+    return `${daily.toFixed(2)} ${unit}`;
+  }
+}
+
+
+===== ship-board.css =====
+
+:host { display: block; }
+
+.board {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 22px 20px 64px;
+}
+
+.mast,
+.panel,
+.banner,
+.nav a {
+  border: 1px solid #e6e0d4;
+  border-radius: 18px;
+}
+
+.mast {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: end;
+  flex-wrap: wrap;
+  padding: 24px;
+  color: #f7f3ea;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(212, 168, 87, 0.35), transparent 42%),
+    linear-gradient(135deg, #0e2238 0%, #16324f 58%, #1a4f5c 100%);
+}
+
+.eyebrow,
+.lede,
+.muted,
+h1,
+h2,
+h3,
+p,
+label span {
+  margin: 0;
+}
+
+.eyebrow {
+  color: #e7c98a;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+h1 { margin-top: 4px; font-size: 1.8rem; }
+.lede { margin-top: 8px; color: rgba(247, 243, 234, 0.78); }
+
+.mast-tools,
+.switchers {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+.mast label,
+.panel label {
+  display: grid;
+  gap: 6px;
+  color: #667386;
+  font-size: 0.82rem;
+}
+
+.mast label { color: #e7c98a; }
+
+select,
+input,
+button {
+  font: inherit;
+}
+
+select,
+input {
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid #d9d1c3;
+  border-radius: 12px;
+  background: #fff;
+  color: #1c2430;
+}
+
+.mast select {
+  background: #0e2238;
+  color: #f7f3ea;
+  border-color: rgba(247, 243, 234, 0.35);
+}
+
+.menu-toggle {
+  height: 42px;
+  background: #0284c7;
+  color: #fff;
+  border-color: #7dd3fc;
+  font-weight: 800;
+}
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 7, 18, 0.65);
+  z-index: 30;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 31;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(325px, 100%);
+  height: 100vh;
+  overflow: auto;
+  padding: 18px;
+  direction: rtl;
+  color: #e2e8f0;
+  background: #0f172a;
+  border-left: 1px solid #38bdf8;
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.85);
+}
+
+.drawer-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #334155;
+}
+
+.drawer-head h2 {
+  margin: 0;
+  color: #38bdf8;
+  font-size: 16px;
+}
+
+.drawer-head p {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.drawer-head .role { color: #4ade80; }
+
+.drawer .close {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: #ef4444;
+  color: #fff;
+  font-weight: 800;
+}
+
+.menu-section {
+  margin: 6px 0 0;
+  padding: 5px 10px;
+  border-right: 3px solid #4ade80;
+  border-radius: 4px;
+  background: rgba(74, 222, 128, 0.1);
+  color: #4ade80;
+  font-size: 11.5px;
+}
+
+.menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.menu-list a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  background: #060d1a;
+  color: #e2e8f0;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: right;
+  text-decoration: none;
+}
+
+.menu-list a:hover,
+.menu-list a.active {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #fff;
+  transform: translateX(-4px);
+}
+
+.nav-groups {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.section-title {
+  font-size: 0.95rem;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.nav a {
+  padding: 8px 12px;
+  background: #fffdf9;
+  color: #14324c;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.nav a.active,
+.tabs button.active {
+  background: #14324c;
+  color: #fff;
+  border-color: #14324c;
+}
+
+.mode.active-sea { background: #d97706; color: #fff; border-color: #d97706; }
+.mode.active-port { background: #0284c7; color: #fff; border-color: #0284c7; }
+.mode.active-pwr { background: #0f6a45; color: #fff; border-color: #0f6a45; }
+
+.panel {
+  margin-top: 16px;
+  padding: 18px;
+  background: #fffdf9;
+}
+
+.banner {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: #eef7f5;
+  color: #0f6a45;
+}
+
+.gauges,
+.meters,
+.form-grid,
+.split {
+  display: grid;
+  gap: 12px;
+}
+
+.gauges { grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 16px; }
+
+.status-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding: 12px;
+  background: #fffdf9;
+  border: 1px solid #e6e0d4;
+  border-radius: 18px;
+}
+
+.chips,
+.mode-group,
+.zone-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #f7f3ea;
+  color: #667386;
+  font-size: 0.82rem;
+  text-decoration: none;
+}
+
+.chip b { color: #14324c; font-weight: 800; }
+
+.gauge-val { display: block; margin-top: 4px; font-size: 1.35rem; color: #14324c; }
+.gauge-val small { font-size: 0.75rem; color: #667386; }
+
+.twin {
+  display: grid;
+  grid-template-columns: 1.35fr 0.9fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.stage { margin-top: 0; }
+.meters-panel { margin-top: 0; display: grid; align-content: start; gap: 12px; }
+.panel-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+
+.ship-art {
+  position: relative;
+  height: 320px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: linear-gradient(#d7eef2 0%, #f4fbfc 58%, #e7f6f4 58%, #d5efe8 100%);
+}
+
+.hull {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 54px;
+  height: 92px;
+  border-radius: 8px 46px 16px 18px;
+  background: linear-gradient(#c45248, #8d2d28);
+  box-shadow: 0 14px 24px rgba(141, 45, 40, 0.18);
+}
+
+.bridge-block {
+  position: absolute;
+  top: -78px;
+  inset-inline-start: 18px;
+  width: 74px;
+  height: 78px;
+  border-radius: 8px 8px 0 0;
+  background: #f7f3ea;
+  box-shadow: inset 0 0 0 8px #14324c;
+}
+
+.crane {
+  position: absolute;
+  top: -118px;
+  width: 8px;
+  height: 118px;
+  border-radius: 8px;
+  background: #e7c98a;
+}
+
+.crane::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  inset-inline-start: 8px;
+  width: 70px;
+  height: 6px;
+  border-radius: 6px;
+  background: #f7f3ea;
+  transform: rotate(-18deg);
+  transform-origin: left center;
+}
+
+.c1 { inset-inline-start: 28%; }
+.c2 { inset-inline-start: 48%; }
+.c3 { inset-inline-start: 68%; }
+
+.ship-name {
+  position: absolute;
+  inset-inline-end: 16px;
+  top: 12px;
+  color: #fff;
+  font-weight: 800;
+}
+
+.zone-row { margin-top: 12px; }
+
+.zone-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid #e6e0d4;
+  background: #fff;
+  color: #14324c;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.86rem;
+}
+
+.zone-pill i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.meter-scroll {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.meter.compact { padding: 10px; }
+.meter.compact .bar span { background: #1a6b73; }
+a.mode { display: inline-flex; align-items: center; text-decoration: none; }
+.meters { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.form-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+.split { grid-template-columns: 1.2fr 0.8fr; }
+
+.gauge,
+.meter,
+.zone {
+  padding: 14px;
+  border: 1px solid #e6e0d4;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.gauge {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.ring {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.ring span {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #14324c;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.days {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eef7f5;
+  color: #0f6a45;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.days.warn { background: #fff6e8; color: #9a6700; }
+.days.danger { background: #fdecec; color: #9b2c2c; }
+
+.modes,
+.tabs,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mode,
+.tabs button,
+button {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #d9d1c3;
+  border-radius: 12px;
+  background: #f3eee4;
+  color: #14324c;
+  cursor: pointer;
+}
+
+button.primary { background: #14324c; color: #fff; border-color: #14324c; }
+button:disabled { opacity: 0.55; cursor: default; }
+
+.bar {
+  height: 8px;
+  border-radius: 99px;
+  background: #efe8dc;
+  overflow: hidden;
+}
+
+.bar span { display: block; height: 100%; background: #1a6b73; }
+
+.meter header,
+.table-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  padding: 8px;
+  border-bottom: 1px solid #efe8dc;
+  text-align: start;
+}
+
+.muted { color: #667386; }
+
+.table-wrap { overflow-x: auto; }
+
+.route-map {
+  height: 420px;
+  margin-top: 12px;
+  border: 1px solid #e6e0d4;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f3eee4;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.badge.ok { background: #eef7f5; color: #0f6a45; }
+.badge.wait { background: #fff6e8; color: #9a6700; }
+.badge.info { background: #e8f3f4; color: #14324c; }
+h2, h3 { color: #14324c; }
+.stack { display: grid; gap: 8px; }
+
+.fleet-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.fleet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.ship-card { margin-top: 0; display: grid; gap: 12px; align-content: start; }
+.ship-card .primary { width: 100%; }
+.specs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.specs p { display: grid; gap: 2px; margin: 0; }
+
+@media (max-width: 980px) {
+  .gauges,
+  .twin,
+  .meter-scroll { grid-template-columns: 1fr; }
+  .split { grid-template-columns: 1fr; }
+}
+
+
+===== ship-twin-dashboard.css =====
+
+/* Digital twin dashboard — layout aligned with reference demo, scoped under .twin-dash */
+
+.desk.twin-dash {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  color: #1c2b33;
+  background: #e7eef1;
+}
+
+.desk.twin-dash.menu-open {
+  grid-template-columns: clamp(280px, 22vw, 390px) minmax(0, 1fr);
+}
+
+.rail {
+  display: none;
+  position: sticky;
+  top: 0;
+  flex-direction: column;
+  gap: 12px;
+  height: 100vh;
+  padding: 14px 12px 16px;
+  overflow: auto;
+  color: #1c2b33;
+  background: linear-gradient(180deg, #f7fbfb 0%, #e4eef0 100%);
+  border-inline-start: 1px solid rgba(16, 25, 44, 0.08);
+}
+
+.desk.menu-open .rail { display: flex; }
+
+.rail-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 10px;
+  border-radius: 0;
+  background: transparent;
+  color: #5d7278;
+}
+
+.rail-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: #e7f6f2;
+  color: #12343a;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.rail-brand p,
+.rail-meta,
+.stage-title p,
+.stage-field span {
+  margin: 0;
+}
+
+.rail-brand p {
+  color: #b7ddd4;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.rail-brand h2,
+.stage-title h2 {
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+}
+
+.rail-brand .close {
+  display: grid;
+  place-items: center;
+  margin-inline-start: auto;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: #e7f4f1;
+  color: #12343a;
+  cursor: pointer;
+}
+
+.rail-brand h2 { color: #12343a; }
+
+.rail-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px;
+  color: #5d7278;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.rail-meta .role {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #d7f3ea;
+  color: #0f6a56;
+}
+
+.rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.rail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0 0;
+  border: 0;
+  border-top: 1px solid rgba(16, 25, 44, 0.08);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.rail-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 0;
+  color: #0f6a56;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+.rail-group h3 i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #e7f4f1;
+  color: #0f6a56;
+  font-style: normal;
+}
+
+.rail-links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rail-group a,
+.rail-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  background: transparent;
+  color: #1c2b33;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.rail-group a span {
+  display: grid;
+  place-items: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 0.95rem;
+}
+
+.rail-group a:hover,
+.rail-group a.active {
+  background: #12343a;
+  color: #f4fbfb;
+  font-weight: 700;
+}
+
+.rail-group a:hover span,
+.rail-group a.active span {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.rail-back {
+  justify-content: center;
+  min-height: 40px;
+  background: transparent;
+  color: #12343a;
+  font-weight: 800;
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.stage-bar {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(16, 25, 44, 0.08);
+  background: #fffaf3;
+}
+
+.stage-title { margin-inline-end: auto; }
+.stage-title p { color: #8a7363; font-size: 0.72rem; }
+.stage-title h2 { color: #12343a; font-size: clamp(1.15rem, 1.4vw, 2rem); }
+
+.stage-field {
+  display: grid;
+  gap: 4px;
+  min-width: 180px;
+  color: #8a7363;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.stage-field select {
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid #e4d3c0;
+  border-radius: 10px;
+  background: #fff;
+  color: #3b241c;
+  font: inherit;
+  font-weight: 700;
+}
+
+.rail-toggle {
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #12343a;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.stage-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 14px 12px;
+  overflow: hidden;
+}
+
+.stage-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.stage-main > app-ship-overview {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mate {
+  display: none;
+  position: sticky;
+  top: 16px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid #eadfce;
+  border-radius: 18px;
+  background: #fffaf3;
+  box-shadow: 0 16px 40px rgba(59, 36, 28, 0.08);
+}
+
+.mate p {
+  margin: 0;
+  color: #c4622d;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.mate h3 {
+  margin: 0 0 6px;
+  color: #3b241c;
+  font-size: clamp(1.05rem, 1.2vw, 1.45rem);
+}
+
+.mate-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px dashed #eadfce;
+  font-size: 0.86rem;
+}
+
+.mate-row span { color: #8a7363; }
+.mate-row b { color: #3b241c; text-align: end; }
+
+.mate a {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #6b2d3c;
+  color: #fffaf3;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+}
+
+@media (min-width: 1101px) {
+  .drawer-backdrop { display: none; }
+}
+
+@media (max-width: 1100px) {
+  .desk.twin-dash,
+  .desk.twin-dash.menu-open { height: auto; min-height: 100vh; overflow: visible; grid-template-columns: minmax(0, 1fr); }
+  .stage { height: auto; min-height: 100vh; overflow: visible; }
+  .stage-body, .stage-main, .stage-main > app-ship-overview, .board-fit { height: auto; overflow: visible; }
+  .twin-stage { grid-template-columns: 1fr; }
+  .board-fit .viewport-card { height: 190px; max-height: 190px; }
+  .board-fit .twin-viewport { height: 100%; min-height: 0; flex: 1; }
+  .rail {
+    display: flex;
+    position: fixed;
+    z-index: 32;
+    top: 0;
+    right: 0;
+    width: min(360px, 100%);
+    transform: translateX(110%);
+    transition: transform 0.22s ease;
+  }
+  .rail.open { transform: translateX(0); }
+  .rail-brand .close { display: grid; place-items: center; }
+  .rail-toggle { display: inline-flex; align-items: center; }
+  .mate { display: none; }
+}
+
+@media (min-width: 1500px) {
+  .stage-body { display: flex; }
+}
+
+@media (min-width: 2400px) {
+  .desk.twin-dash.menu-open { grid-template-columns: 380px minmax(0, 1fr); }
+  .rail-group a { font-size: 0.9rem; padding: 10px; }
+  .rail-group a span { flex-basis: 36px; width: 36px; height: 36px; }
+  .stage-body { display: flex; }
+  .mate { padding: 24px; }
+  .mate-row { font-size: 1.05rem; }
+}
+
+.twin-dash .banner {
+  margin-top: 12px;
+  border-color: #c9b59a;
+  background: #f3e7d4;
+  color: #6b3b16;
+}
+
+.dash-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 18px;
+  margin-bottom: 10px;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+}
+
+.dash-header h2 {
+  margin: 0;
+  color: #38bdf8;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.dash-header h2 span {
+  color: #f8fafc;
+}
+
+.dash-header-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.ship-switcher-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid #0284c7;
+  border-radius: 10px;
+  background: #060d1a;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.ship-switcher-box select {
+  min-width: 200px;
+  padding: 6px 10px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #38bdf8;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.dash-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.top-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border: 1px solid #38bdf8;
+  border-radius: 8px;
+  background: #1e293b;
+  color: #f8fafc;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.top-action-btn:hover {
+  background: #0284c7;
+  color: #fff;
+}
+
+.top-action-btn.menu-toggle {
+  border-color: #7dd3fc;
+  background: #0284c7;
+  color: #fff;
+}
+
+.role-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #cbd5e1;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.role-badge select {
+  border: 0;
+  background: transparent;
+  color: #38bdf8;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.voyage-status-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 8px 14px;
+  border: 1px solid #eadfce;
+  border-radius: 16px;
+  background: #fffaf3;
+}
+
+.status-notch-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.status-notch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid #eadfce;
+  border-radius: 8px;
+  background: #fff;
+  color: #3b241c;
+  font-size: 0.72rem;
+}
+
+.status-notch b {
+  color: #9a3412;
+  font-weight: 700;
+}
+
+.status-notch.coords {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.status-notch.coords b {
+  color: #2f6b45;
+}
+
+.mode-switch-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid #eadfce;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.mode-btn {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #8a7363;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.mode-btn.active-sea {
+  background: #d97706;
+  color: #fff;
+}
+
+.mode-btn.active-port {
+  background: #6b2d3c;
+  color: #fff;
+}
+
+.mode-btn.active-pwr {
+  background: #059669;
+  color: #fff;
+}
+
+.master-gauges-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.gauge-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #eadfce;
+  border-radius: 16px;
+  background: #fffaf3;
+  box-shadow: 0 10px 24px rgba(59, 36, 28, 0.06);
+}
+
+.gauge-card h4 {
+  margin: 0 0 4px;
+  color: #12343a;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.gauge-card .gauge-val {
+  color: #6b2d3c;
+  font-size: clamp(1.1rem, 1.3vw, 1.7rem);
+  font-weight: 800;
+}
+
+.gauge-card .gauge-val small {
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.gauge-where,
+.gauge-line {
+  margin: 3px 0 0;
+  color: #5d7278;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.gauge-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gauge-line b { color: #12343a; }
+
+.days-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 8px;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  border-radius: 6px;
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.days-badge.warn {
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.days-badge.danger {
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+}
+
+.radial-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 62px;
+  height: 62px;
+}
+
+.radial-wrap svg {
+  width: 62px;
+  height: 62px;
+  transform: rotate(-90deg);
+}
+
+.radial-bg {
+  fill: none;
+  stroke: #eadfce;
+  stroke-width: 6;
+}
+
+.radial-prog {
+  fill: none;
+  stroke-width: 6;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.35s ease;
+}
+
+.radial-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3b241c;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.board-fit {
+  display: grid;
+  flex: 1;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 8px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.board-fit .voyage-status-strip { margin: 0; }
+.board-fit .master-gauges-grid { margin: 0; }
+.board-fit .gauge-card { padding: 8px 10px; }
+.board-fit .gauge-where { display: none; }
+.board-fit .gauge-line { font-size: 0.68rem; }
+
+.twin-stage {
+  display: block;
+  min-height: 0;
+}
+
+.parts-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid #d5e3e6;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.parts-pane header h3 { margin: 0; color: #12343a; font-size: 1.25rem; }
+.parts-pane header p { margin: 4px 0 8px; color: #5d7278; font-size: 0.9rem; }
+
+.part {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #d5e3e6;
+  border-radius: 12px;
+  background: #f4f8f8;
+  color: #12343a;
+  text-align: start;
+  cursor: pointer;
+}
+
+.part i {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 42px;
+  border-radius: 7px;
+}
+
+.part span { display: grid; min-width: 0; gap: 2px; }
+.part b { font-size: 1.05rem; }
+.part small { color: #5d7278; font-size: 0.84rem; line-height: 1.35; }
+.part.selected { background: #12343a; color: #f4fbfb; border-color: #12343a; }
+.part.selected small { color: #d5ece6; }
+
+.part-data {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid #d5e3e6;
+}
+
+.part-data h4 { margin: 0; color: #12343a; font-size: 1.15rem; }
+.part-note { margin: 0; color: #3d5158; font-size: 0.95rem; line-height: 1.45; }
+
+.part-meter { display: grid; gap: 4px; }
+.part-meter div { display: flex; justify-content: space-between; gap: 8px; font-size: 0.95rem; }
+.part-meter i { display: block; height: 8px; border-radius: 99px; background: #e4eef0; overflow: hidden; }
+.part-meter i b { display: block; height: 100%; }
+.part-meter small { color: #5d7278; font-size: 0.84rem; }
+
+.part-data a {
+  padding: 10px;
+  border-radius: 10px;
+  background: #12343a;
+  color: #f4fbfb;
+  font-size: 0.92rem;
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+}
+
+.board-fit .viewport-card { height: 190px; max-height: 190px; min-height: 0; background: #d7e6ef; }
+.board-fit .twin-viewport { position: relative; flex: 1 1 auto; height: 100%; min-height: 0; }
+
+.model-title {
+  margin: 0;
+  padding: 12px 16px 0;
+  color: #f4fbfb;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.viewport-card {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #c9a27a;
+  border-radius: 18px;
+  background: #241910;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+
+.twin-viewport {
+  position: relative;
+  width: 100%;
+  min-height: 560px;
+  height: clamp(560px, 68vh, 920px);
+  overflow: hidden;
+  cursor: grab;
+}
+
+.twin-viewport canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.twin-viewport:active {
+  cursor: grabbing;
+}
+
+.hud-controls {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hud-btn {
+  padding: 7px 13px;
+  border: 1px solid #38bdf8;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(4px);
+  color: #e2e8f0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hud-btn:hover,
+.hud-btn.active {
+  background: #0284c7;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.45);
+}
+
+.twin-viewport canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.twin-caption {
+  position: absolute;
+  left: 16px;
+  bottom: 14px;
+  z-index: 2;
+  display: grid;
+  gap: 2px;
+  max-width: min(420px, 70%);
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(255, 250, 243, 0.92);
+  color: #3b241c;
+}
+
+.twin-caption strong { font-size: 0.95rem; }
+.twin-caption span { color: #6b5346; font-size: 0.75rem; }
+
+.twin-viewport .ship-art {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  border-radius: 0;
+  background: linear-gradient(180deg, #0c4a6e 0%, #0369a1 38%, #0ea5e9 52%, #0284c7 100%);
+}
+
+.twin-viewport .ship-art .sea-hidden {
+  opacity: 0.15;
+}
+
+.twin-viewport .sea {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48%;
+  background: linear-gradient(180deg, rgba(14, 165, 233, 0.2) 0%, #0c4a6e 35%, #082f49 100%);
+}
+
+.twin-viewport .hull {
+  bottom: 22%;
+  height: 110px;
+}
+
+.twin-viewport.cutaway .hull {
+  background: linear-gradient(90deg, rgba(196, 82, 72, 0.55), rgba(141, 45, 40, 0.85));
+  box-shadow: inset 0 0 0 3px #38bdf8, 0 14px 24px rgba(141, 45, 40, 0.28);
+}
+
+.zone-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid #1e293b;
+  background: #0f172a;
+}
+
+.twin-dash .zone-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid #475569;
+  border-radius: 20px;
+  background: #1e293b;
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.twin-dash .zone-pill:hover,
+.twin-dash .zone-pill.selected {
+  background: #e07a3d;
+  color: #fffaf3;
+  transform: translateY(-2px);
+}
+
+.twin-dash .zone-pill .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.data-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: min(625px, 85vh);
+  padding: 16px;
+  overflow-y: auto;
+  border: 1px solid #eadfce;
+  border-radius: 18px;
+  background: #fffaf3;
+  box-shadow: 0 10px 24px rgba(59, 36, 28, 0.06);
+}
+
+.zone-operations-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid #e7c2a4;
+  border-radius: 12px;
+  background: #f8efe4;
+}
+
+.zone-operations-banner .zone-label {
+  color: #8a7363;
+  font-size: 0.68rem;
+}
+
+.zone-operations-banner strong {
+  color: #6b2d3c;
+  font-size: 0.88rem;
+}
+
+.btn-show-ops {
+  padding: 7px 14px;
+  border: 1px solid #6b2d3c;
+  border-radius: 7px;
+  background: #9a3412;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btn-show-ops:hover {
+  background: #6b2d3c;
+}
+
+.left-gauges-box {
+  padding: 12px;
+  border: 1px solid #eadfce;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.meters-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.meters-toolbar h3 {
+  margin: 0;
+  color: #9a3412;
+  font-size: 0.82rem;
+}
+
+.meter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mini-edit-btn {
+  padding: 4px 8px;
+  border: 1px solid #e4d3c0;
+  border-radius: 4px;
+  background: #fffaf3;
+  color: #9a3412;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.mini-edit-btn.gold {
+  color: #9a3412;
+}
+
+.mini-edit-btn:hover {
+  background: #6b2d3c;
+  color: #fffaf3;
+}
+
+.left-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.left-tab-btn {
+  padding: 6px 8px;
+  border: 1px solid #eadfce;
+  border-radius: 6px;
+  background: #fffaf3;
+  color: #3b241c;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.left-tab-btn.active {
+  border-color: #6b2d3c;
+  background: #6b2d3c;
+  color: #fff;
+}
+
+.tank-meters-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  max-height: 340px;
+  padding-left: 4px;
+  overflow-y: auto;
+}
+
+.tank-meter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 10px;
+  border: 1px solid #eadfce;
+  border-radius: 8px;
+  background: #fffaf3;
+  color: #3b241c;
+}
+
+.tank-meter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.tank-bar-bg {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #1e293b;
+}
+
+.tank-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.tank-item-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #8a7363;
+  font-size: 0.65rem;
+}
+
+.daily-reports-box {
+  padding: 10px 12px;
+  border: 1px solid #eadfce;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.daily-reports-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.daily-reports-head span {
+  color: #9a3412;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.daily-reports-box p {
+  margin: 4px 0;
+  color: #5c4638;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.daily-reports-box .empty-note {
+  color: #64748b;
+  font-style: italic;
+}
+
+@media (max-width: 1100px) {
+  .master-gauges-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .main-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .master-gauges-grid,
+  .tank-meters-grid { grid-template-columns: 1fr; }
+  .data-card { max-height: none; }
+}
+
+@media (min-width: 1680px) {
+  .master-gauges-grid { gap: 16px; }
+  .data-card { max-height: none; }
+  .main-layout { gap: 22px; align-items: start; }
+  .board-fit .viewport-card { height: 190px; max-height: 190px; }
+  .tank-meters-grid { max-height: none; }
+}
+
+@media (min-width: 2400px) {
+  .master-gauges-grid { gap: 20px; }
+  .gauge-card { padding: 18px 20px; }
+  .main-layout { grid-template-columns: 1fr; gap: 28px; }
+  .board-fit .viewport-card { height: 190px; max-height: 190px; }
+  .status-notch, .mode-btn, .zone-pill { font-size: 0.95rem; }
+}
+
+.bunker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(2, 6, 16, 0.62);
+  backdrop-filter: blur(3px);
+}
+
+.bunker-modal {
+  position: fixed;
+  z-index: 71;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(980px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 18px 18px 16px;
+  border-radius: 16px;
+  border: 1px solid #e4d3c0;
+  background: #fffaf3;
+  box-shadow: 0 24px 70px rgba(59, 36, 28, 0.28);
+  color: #3b241c;
+}
+
+.bunker-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.bunker-head h3 {
+  flex: 1;
+  margin: 0;
+  text-align: center;
+  color: #6b2d3c;
+  font-size: 20px;
+}
+
+.bunker-close {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.bunker-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.bunker-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bunker-grid label.span-2 {
+  grid-column: span 2;
+}
+
+.bunker-grid span {
+  color: #8a7363;
+  font-size: 13px;
+}
+
+.bunker-grid input,
+.bunker-grid select {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #e4d3c0;
+  background: #fff;
+  color: #3b241c;
+  font: inherit;
+}
+
+.bunker-grid small {
+  color: #2f6b45;
+  font-size: 12px;
+}
+
+.bunker-grid small.price {
+  color: #9a3412;
+}
+
+.bunker-save {
+  width: 100%;
+  margin-top: 16px;
+  min-height: 48px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f59e0b, #d97706);
+  color: #1c1406;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+@media (max-width: 800px) {
+  .bunker-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bunker-grid label.span-2 {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .master-gauges-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .left-tabs {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tank-meters-grid {
+    grid-template-columns: 1fr;
+  }
+}
