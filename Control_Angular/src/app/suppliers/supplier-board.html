@@ -1,0 +1,91 @@
+<section class="board" dir="rtl" lang="ar">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">مركز التحكم</p>
+      <h1>الموردون</h1>
+      <p class="lede">إضافة مورد، وربطه بقسم، وفك الربط. القسم الابن يظهر معه موردو القسم الأب في طلب الشراء.</p>
+    </div>
+    <button type="button" class="ghost" (click)="load()" [disabled]="loading()">تحديث</button>
+  </header>
+
+  @if (error()) {
+    <div class="banner error">{{ error() }}</div>
+  }
+  @if (success()) {
+    <div class="banner ok">{{ success() }}</div>
+  }
+
+  <form class="panel" (ngSubmit)="create()">
+    <h2>إضافة مورد</h2>
+    <div class="grid">
+      <label>
+        <span>الاسم</span>
+        <input name="companyName" [(ngModel)]="companyName" required />
+      </label>
+      <label>
+        <span>البريد</span>
+        <input class="ltr" name="primaryEmail" [(ngModel)]="primaryEmail" />
+      </label>
+      <label>
+        <span>الهاتف</span>
+        <input class="ltr" name="phone" [(ngModel)]="phone" />
+      </label>
+      <label>
+        <span>الدولة</span>
+        <input name="country" [(ngModel)]="country" />
+      </label>
+      <label>
+        <span>مسؤول التواصل</span>
+        <input name="contactPerson" [(ngModel)]="contactPerson" />
+      </label>
+      <label>
+        <span>القسم</span>
+        <select name="categoryId" [(ngModel)]="categoryId">
+          <option value="">بدون قسم الآن</option>
+          @for (category of categories(); track category.id) {
+            <option [value]="category.id">{{ categoryLabel(category) }}</option>
+          }
+        </select>
+      </label>
+    </div>
+    <button type="submit" class="primary" [disabled]="saving()">حفظ المورد</button>
+  </form>
+
+  <form class="panel search" (ngSubmit)="load()">
+    <label>
+      <span>بحث</span>
+      <input name="search" [(ngModel)]="search" />
+    </label>
+    <button type="submit" [disabled]="loading()">بحث</button>
+  </form>
+
+  @if (loading()) {
+    <div class="progress" role="progressbar"></div>
+  } @else if (items().length === 0) {
+    <div class="panel">لا يوجد موردون.</div>
+  } @else {
+    @for (supplier of items(); track supplier.id) {
+      <article class="panel">
+        <h3>{{ supplier.companyName }}</h3>
+        <p class="muted ltr">{{ supplier.primaryEmail || '—' }} · {{ supplier.phone || '—' }}</p>
+        <ul class="chips">
+          @for (category of supplier.categories; track category.id) {
+            <li>
+              {{ category.parentName ? category.parentName + ' / ' + category.name : category.name }}
+              <button type="button" (click)="unlink(supplier.id, category.categoryId)" [disabled]="saving()">فك الربط</button>
+            </li>
+          }
+        </ul>
+        <div class="link-row">
+          <select [(ngModel)]="linkCategoryId[supplier.id]" [name]="'link-' + supplier.id">
+            <option value="">اختر قسماً للربط</option>
+            @for (category of categories(); track category.id) {
+              <option [value]="category.id">{{ categoryLabel(category) }}</option>
+            }
+          </select>
+          <button type="button" (click)="link(supplier)" [disabled]="saving()">ربط</button>
+        </div>
+      </article>
+    }
+  }
+</section>

@@ -25,7 +25,7 @@ export class Login implements OnInit {
   rememberMe = true;
 
   ngOnInit(): void {
-    this.title.setTitle('Login | Ships Control');
+    this.title.setTitle('Login | Falcon Shipping');
   }
 
   submit(): void {

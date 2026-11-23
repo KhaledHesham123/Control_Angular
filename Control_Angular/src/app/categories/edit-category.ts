@@ -62,7 +62,7 @@ export class EditCategory implements OnInit {
   selectedUnlinkSupplierIds: string[] = [];
 
   ngOnInit(): void {
-    this.title.setTitle('Edit Category | Ships Control');
+    this.title.setTitle('Edit Category | Falcon Shipping');
 
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const id = params.get('id')?.trim() ?? '';

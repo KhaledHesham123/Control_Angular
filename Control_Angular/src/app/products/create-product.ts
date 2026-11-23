@@ -49,7 +49,7 @@ export class CreateProduct implements OnInit {
   imagePreview: string | null = null;
 
   ngOnInit(): void {
-    this.title.setTitle('Create Product | Ships Control');
+    this.title.setTitle('Create Product | Falcon Shipping');
     this.loadLookups();
   }
 

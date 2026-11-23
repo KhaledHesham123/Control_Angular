@@ -4,8 +4,12 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { forkJoin } from 'rxjs';
 import { Title } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
+import { CategoryCatalogService } from '../products/category-catalog.service';
 import { ProductDto } from '../products/product.model';
 import { ProductService } from '../products/product.service';
+import { categoryPath, descendantIds } from '../ship/core/ship-calc';
+import { Category } from '../ship/core/ship.types';
+import { CategoryService } from './category.service';
 import { RfqRequestService } from './rfq-request.service';
 import {
   formatCategoryLabel,
@@ -13,6 +17,15 @@ import {
   RfqRequest,
   SelectedRfqProduct,
 } from './rfq.model';
+
+interface CatalogProduct {
+  id: string;
+  categoryId: string;
+  name: string;
+  code: string;
+  unit: string;
+  description: string | null;
+}
 
 type WizardStep = 1 | 2;
 
@@ -24,6 +37,8 @@ type WizardStep = 1 | 2;
 })
 export class CreateRfq implements OnInit {
   private readonly productService = inject(ProductService);
+  private readonly categoryCatalog = inject(CategoryCatalogService);
+  private readonly categoryService = inject(CategoryService);
   private readonly rfqRequestService = inject(RfqRequestService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly title = inject(Title);
@@ -56,8 +71,46 @@ export class CreateRfq implements OnInit {
   readonly selectedCount = computed(() => Object.keys(this.selectedProducts()).length);
   readonly rfqStatusLabel = computed(() => this.statusLabel(this.rfq()?.status));
 
+  readonly loadingCatalog = signal(false);
+  readonly catId = signal<string | null>(null);
+  readonly q = signal('');
+  readonly tree = signal<Category[]>([]);
+  readonly catalog = signal<CatalogProduct[]>([]);
+
+  readonly cartLines = computed(() => Object.values(this.selectedProducts()));
+
+  readonly counts = computed(() => {
+    const cats = this.tree();
+    const prods = this.catalog();
+    const out: Record<string, number> = { '*': prods.length };
+    for (const category of cats) {
+      const ids = new Set(descendantIds(category.id, cats));
+      out[category.id] = prods.filter((product) => ids.has(product.categoryId)).length;
+    }
+    return out;
+  });
+
+  readonly visibleProducts = computed(() => {
+    const cats = this.tree();
+    const id = this.catId();
+    const ids = id ? new Set(descendantIds(id, cats)) : null;
+    const term = this.q().trim().toLowerCase();
+    return this.catalog().filter(
+      (product) =>
+        (!ids || ids.has(product.categoryId)) &&
+        (!term ||
+          product.name.toLowerCase().includes(term) ||
+          product.code.toLowerCase().includes(term)),
+    );
+  });
+
+  readonly catTitle = computed(() =>
+    this.catId() ? categoryPath(this.catId(), this.tree()) : 'كل الأصناف',
+  );
+
   ngOnInit(): void {
-    this.title.setTitle('RFQ | Ships Control');
+    this.title.setTitle('طلب شراء جديد | Falcon Shipping');
+    this.loadCatalog();
 
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const id = params.get('id')?.trim() ?? '';
@@ -138,6 +191,94 @@ export class CreateRfq implements OnInit {
       groups.set(categoryId, group);
     }
     return [...groups.values()];
+  }
+
+  loadCatalog(): void {
+    this.loadingCatalog.set(true);
+    forkJoin({
+      categories: this.categoryCatalog.lookup(),
+      withProducts: this.categoryService.getWithProducts(false),
+    })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: ({ categories, withProducts }) => {
+          this.loadingCatalog.set(false);
+          const tree = (categories.data ?? [])
+            .filter((category) => category.id)
+            .map((category) => ({
+              id: category.id,
+              name: category.name,
+              parentId: category.parentCategoryId,
+              icon: 'tag',
+            }));
+          this.tree.set(tree);
+
+          const products: CatalogProduct[] = [];
+          for (const category of withProducts.data ?? []) {
+            for (const product of category.products ?? []) {
+              if (!product.isActive) {
+                continue;
+              }
+              products.push({
+                id: product.id,
+                categoryId: category.id,
+                name: product.name,
+                code: product.code ?? '',
+                unit: product.defaultUnit,
+                description: product.description,
+              });
+            }
+          }
+          this.catalog.set(products);
+          if (!categories.succeeded && !withProducts.succeeded) {
+            this.error.set('تعذر تحميل الأقسام والأصناف.');
+          }
+        },
+        error: (err: HttpErrorResponse) => {
+          this.loadingCatalog.set(false);
+          this.error.set(this.readError(err, 'تعذر تحميل الأقسام والأصناف.'));
+        },
+      });
+  }
+
+  path(id: string): string {
+    return categoryPath(id, this.tree());
+  }
+
+  inCart(id: string): boolean {
+    return !!this.selectedProducts()[id];
+  }
+
+  addProduct(product: CatalogProduct): void {
+    if (this.creating() || this.inCart(product.id)) {
+      return;
+    }
+    const current = { ...this.selectedProducts() };
+    current[product.id] = {
+      productId: product.id,
+      name: product.name,
+      code: product.code,
+      unit: product.unit,
+      quantity: 1,
+      notes: '',
+      categoryId: product.categoryId,
+      categoryName: this.path(product.categoryId) || 'قسم',
+    };
+    this.selectedProducts.set(current);
+  }
+
+  removeLine(productId: string): void {
+    const current = { ...this.selectedProducts() };
+    delete current[productId];
+    this.selectedProducts.set(current);
+  }
+
+  stepQty(productId: string, delta: number): void {
+    const line = this.selectedProducts()[productId];
+    if (!line) {
+      return;
+    }
+    this.updateQuantity(productId, line.quantity + delta);
   }
 
   isProductSelected(productId: string): boolean {
@@ -374,6 +515,9 @@ export class CreateRfq implements OnInit {
     this.clearCategorySelection();
     this.clearSelectedProducts();
     this.requestNotes.set('');
+    this.catId.set(null);
+    this.q.set('');
+    void this.router.navigateByUrl('/rfq/create');
     this.error.set(null);
     this.status.set(null);
   }

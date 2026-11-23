@@ -46,7 +46,7 @@ export class EditVessel implements OnInit {
   selectedUnlinkUserIds: string[] = [];
 
   ngOnInit(): void {
-    this.title.setTitle('Edit Vessel | Ships Control');
+    this.title.setTitle('Edit Vessel | Falcon Shipping');
 
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const id = params.get('id')?.trim() ?? '';

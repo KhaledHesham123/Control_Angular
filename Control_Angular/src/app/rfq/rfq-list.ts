@@ -46,9 +46,10 @@ export class RfqList implements OnInit {
   statusFilter: RfqRequestStatus | '' = '';
   categoryId = '';
   vesselId = '';
+  q = '';
 
   ngOnInit(): void {
-    this.title.setTitle('RFQ Requests | Ships Control');
+    this.title.setTitle('طلبات الشراء | Falcon Shipping');
     this.startUtcTimer();
     this.loadVessels();
     this.loadRequests();
@@ -77,11 +78,7 @@ export class RfqList implements OnInit {
     this.error.set(null);
 
     this.rfqRequestService
-      .getAll({
-        status: this.statusFilter === '' ? null : this.statusFilter,
-        categoryId: this.categoryId || null,
-        vesselId: this.vesselId || null,
-      })
+      .getAll()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (result) => {
@@ -104,7 +101,6 @@ export class RfqList implements OnInit {
 
   onCategoryChange(categoryId: string): void {
     this.categoryId = categoryId || '';
-    this.loadRequests();
   }
 
   onCategoryFailed(message: string): void {
@@ -113,12 +109,57 @@ export class RfqList implements OnInit {
 
   onStatusChange(value: RfqRequestStatus | '' | null): void {
     this.statusFilter = value === null || value === undefined ? '' : value;
-    this.loadRequests();
   }
 
   onVesselChange(value: string): void {
     this.vesselId = value || '';
-    this.loadRequests();
+  }
+
+  rows(): RfqRequestListItemDto[] {
+    const term = this.q.trim().toLowerCase();
+    return this.items().filter((item) => {
+      if (this.statusFilter !== '' && Number(item.status) !== Number(this.statusFilter)) {
+        return false;
+      }
+      if (this.vesselId && item.vesselId !== this.vesselId) {
+        return false;
+      }
+      if (this.categoryId && !(item.categories ?? []).some((category) => category.id === this.categoryId)) {
+        return false;
+      }
+      if (!term) {
+        return true;
+      }
+      return `${item.title} ${item.vesselName}`.toLowerCase().includes(term);
+    });
+  }
+
+  count(status: RfqRequestStatus): number {
+    return this.items().filter((item) => Number(item.status) === status).length;
+  }
+
+  tone(status: RfqRequestStatus | number): string {
+    switch (Number(status)) {
+      case RfqRequestStatus.Draft:
+        return 'muted';
+      case RfqRequestStatus.Approved:
+        return 'ok';
+      case RfqRequestStatus.AwaitingReceipt:
+        return 'warn';
+      case RfqRequestStatus.Received:
+        return 'done';
+      case RfqRequestStatus.Sent:
+      case RfqRequestStatus.OffersReceived:
+        return 'info';
+      case RfqRequestStatus.Closed:
+        return 'muted';
+      default:
+        return 'gold';
+    }
+  }
+
+  categoryLabel(category: RfqRequestCategoryDto): string {
+    return formatCategoryLabel(category);
   }
 
   isDraft(status: RfqRequestStatus | number): boolean {
@@ -167,8 +208,31 @@ export class RfqList implements OnInit {
     void this.router.navigateByUrl('/rfq/create');
   }
 
+  submittedAt(value: string): string {
+    const date = this.parseUtc(value);
+    if (!date) {
+      return '—';
+    }
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  canEmail(status: RfqRequestStatus | number): boolean {
+    const value = Number(status);
+    return (
+      value === RfqRequestStatus.Approved ||
+      value === RfqRequestStatus.ReadyToSend ||
+      value === RfqRequestStatus.Sent ||
+      value === RfqRequestStatus.OffersReceived
+    );
+  }
+
   confirm(id: string): void {
     void this.router.navigate(['/rfq', id, 'confirm']);
+  }
+
+  openOffers(id: string): void {
+    void this.router.navigate(['/rfq', id, 'offers']);
   }
 
   openEmail(id: string): void {

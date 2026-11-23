@@ -1,4 +1,4 @@
-import { addDays, rootOf, today, uid } from './ship-calc';
+import { addDays, rootOf, suggestVoyageConsumption, today, uid } from './ship-calc';
 import { buildCertRegister } from './ship-certs';
 import { AMANY_CERT_VALUES } from './ship-certs-seed';
 import {
@@ -293,18 +293,27 @@ function defaultTanks(scale = 1): Tank[] {
     max: Math.round(max * scale * 10) / 10,
   });
   return [
-    t('hfo1', 'خزان وقود ثقيل 1', 'hfo', 310, 350),
-    t('hfo2', 'خزان وقود ثقيل 2', 'hfo', 295, 350),
-    t('hfo3', 'خزان وقود ثقيل 3', 'hfo', 220, 250),
-    t('hfo4', 'خزان خدمة الوقود', 'hfo', 165, 200),
-    t('mgo1', 'خزان ديزل 1', 'mgo', 145, 160),
-    t('mgo2', 'خزان ديزل 2', 'mgo', 95, 120),
-    t('mgo3', 'خزان ديزل 3', 'mgo', 68, 80),
-    t('lube1', 'خزان زيت المحرك الرئيسي', 'lube', 48, 60),
-    t('lube2', 'خزان زيت المساعد', 'lube', 28, 35),
-    t('fw1', 'مياه عذبة 1', 'water', 190, 220),
-    t('fw2', 'مياه عذبة 2', 'water', 165, 200),
+    t('hfo', 'خزان الوقود الثقيل', 'hfo', 990, 1150),
+    t('mgo', 'خزان الديزل', 'mgo', 308, 360),
+    t('lube', 'خزان الزيوت', 'lube', 76, 95),
+    t('water', 'خزان المياه العذبة', 'water', 355, 420),
   ];
+}
+
+function withExpected(
+  voyages: Array<Omit<Voyage, 'expectedHfo' | 'expectedMgo' | 'expectedLube' | 'status'> & { status: string }>,
+  config: ShipConfig,
+): Voyage[] {
+  return voyages.map((voyage) => {
+    const burn = suggestVoyageConsumption(voyage, config, 18);
+    return {
+      ...voyage,
+      status: voyage.status as Voyage['status'],
+      expectedHfo: burn.hfo,
+      expectedMgo: burn.mgo,
+      expectedLube: burn.lube,
+    };
+  });
 }
 
 function defaultConfig(): ShipConfig {
@@ -490,7 +499,7 @@ function buildMainVessel(): VesselData {
   const v5Start = addDays(now, -150);
   const v6Start = addDays(now, -92);
   const v7Start = addDays(now, -13);
-  const voyages: Voyage[] = [
+  const voyages = [
     {
       id: 5,
       number: 'VOY-2026-01',
@@ -732,10 +741,10 @@ function buildMainVessel(): VesselData {
   }
 
   const bunkers: BunkerRecord[] = [
-    { id: uid('bk'), date: addDays(v7Start, 3), tankId: 'hfo2', qty: 220, pricePerTon: 548, supplier: 'مصر للبترول للتموين البحري', port: 'الإسكندرية', invoice: 'BNK-2026-188', voyageId: 7 },
-    { id: uid('bk'), date: addDays(v7Start, 3), tankId: 'mgo1', qty: 45, pricePerTon: 790, supplier: 'مصر للبترول للتموين البحري', port: 'الإسكندرية', invoice: 'BNK-2026-189', voyageId: 7 },
-    { id: uid('bk'), date: addDays(v6Start, 7), tankId: 'hfo1', qty: 240, pricePerTon: 524, supplier: 'Minerva Bunkering Med', port: 'بيرايوس', invoice: 'MNV-5521', voyageId: 6 },
-    { id: uid('bk'), date: addDays(v5Start, 8), tankId: 'hfo1', qty: 260, pricePerTon: 561, supplier: 'Gulf Bunkers', port: 'جدة', invoice: 'GB-3302', voyageId: 5 },
+    { id: uid('bk'), date: addDays(v7Start, 3), tankId: 'hfo', qty: 220, pricePerTon: 548, supplier: 'مصر للبترول للتموين البحري', port: 'الإسكندرية', invoice: 'BNK-2026-188', voyageId: 7 },
+    { id: uid('bk'), date: addDays(v7Start, 3), tankId: 'mgo', qty: 45, pricePerTon: 790, supplier: 'مصر للبترول للتموين البحري', port: 'الإسكندرية', invoice: 'BNK-2026-189', voyageId: 7 },
+    { id: uid('bk'), date: addDays(v6Start, 7), tankId: 'hfo', qty: 240, pricePerTon: 524, supplier: 'Minerva Bunkering Med', port: 'بيرايوس', invoice: 'MNV-5521', voyageId: 6 },
+    { id: uid('bk'), date: addDays(v5Start, 8), tankId: 'hfo', qty: 260, pricePerTon: 561, supplier: 'Gulf Bunkers', port: 'جدة', invoice: 'GB-3302', voyageId: 5 },
   ];
 
   const crew: CrewMember[] = [
@@ -777,7 +786,7 @@ function buildMainVessel(): VesselData {
     movements,
     requests: reqs,
     crew,
-    voyages,
+    voyages: withExpected(voyages, defaultConfig()),
     bunkers,
     expenses: [
       { id: uid('ex'), date: addDays(now, -6), voyageId: 7, label: 'رسوم تفتيش وفحص (Port State)', amount: 850, note: '' },
@@ -809,18 +818,21 @@ function buildSecondVessel(): VesselData {
       crewMember(21, 'أيمن فتحي', 'قبطان', 'deck', 'OnBoard', 6200, 'EG-B2020881', '+20 100 777 1010', -90, [['Master Mariner COC', 'MM-55231', 800]]),
       crewMember(22, 'ياسر منير', 'كبير مهندسين', 'engine', 'OnBoard', 5900, 'EG-B2021990', '+20 101 777 2020', -90, [['Chief Engineer COC', 'CE-4410', 640]]),
     ],
-    voyages: [
-      {
-        id: 21,
-        number: 'VOY-2026-N1',
-        title: 'دمياط ⬅ الإسكندرية (رحلة داخلية)',
-        status: 'completed',
-        startDate: start,
-        endDate: addDays(start, 6),
-        notes: '',
-        stops: [stopOf('dam', start, addDays(start, 1), ['تحميل'], 'EgyCanal', 9200), stopOf('alx', addDays(start, 5), addDays(start, 6), ['تفريغ'], 'Misr Marine', 6100)],
-      },
-    ],
+    voyages: withExpected(
+      [
+        {
+          id: 21,
+          number: 'VOY-2026-N1',
+          title: 'دمياط ⬅ الإسكندرية (رحلة داخلية)',
+          status: 'completed',
+          startDate: start,
+          endDate: addDays(start, 6),
+          notes: '',
+          stops: [stopOf('dam', start, addDays(start, 1), ['تحميل'], 'EgyCanal', 9200), stopOf('alx', addDays(start, 5), addDays(start, 6), ['تفريغ'], 'Misr Marine', 6100)],
+        },
+      ],
+      { ...defaultConfig(), hfoTonsPerDaySea: 19 },
+    ),
     bunkers: [],
     expenses: [],
     logs: [],

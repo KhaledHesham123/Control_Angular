@@ -15,6 +15,11 @@ export class ControlShell {
   private readonly router = inject(Router);
 
   menuOpen = false;
+
+  constructor() {
+    const wide = typeof window !== 'undefined' && window.matchMedia('(min-width: 961px)').matches;
+    this.menuOpen = wide && !this.router.url.startsWith('/ship');
+  }
   private readonly url = toSignal(
     this.router.events.pipe(
       filter((event): event is NavigationEnd => event instanceof NavigationEnd),
@@ -37,6 +42,10 @@ export class ControlShell {
   }
 
   closeMenu(): void {
+    if (window.matchMedia('(max-width: 960px)').matches) this.menuOpen = false;
+  }
+
+  hideMenu(): void {
     this.menuOpen = false;
   }
 

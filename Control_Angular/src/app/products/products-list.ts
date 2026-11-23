@@ -33,7 +33,7 @@ export class ProductsList implements OnInit {
   categoryId = '';
 
   ngOnInit(): void {
-    this.title.setTitle('Product Management | Ships Control');
+    this.title.setTitle('Product Management | Falcon Shipping');
     this.loadProducts();
   }
 

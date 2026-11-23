@@ -6,6 +6,7 @@ import { Result } from '../core/api.model';
 import {
   ConfirmRfqRequestCommand,
   CreateRfqRequestCommand,
+  ReviewRfqRequestCommand,
   GenerateEmailContentForSuppliersCommand,
   GeneratedRfqRequestContent,
   PrepareAllSuppliersRfqEmailDto,
@@ -66,6 +67,10 @@ export class RfqRequestService {
 
   confirm(command: ConfirmRfqRequestCommand): Observable<Result<boolean>> {
     return this.http.put<Result<boolean>>(`${this.baseUrl}/Confirm`, command);
+  }
+
+  review(command: ReviewRfqRequestCommand): Observable<Result<boolean>> {
+    return this.http.put<Result<boolean>>(`${this.baseUrl}/Review`, command);
   }
 
   prepareSupplierEmails(

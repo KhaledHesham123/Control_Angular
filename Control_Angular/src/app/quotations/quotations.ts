@@ -29,7 +29,7 @@ export class Quotations implements OnInit {
   pageSize = 10;
 
   ngOnInit(): void {
-    this.title.setTitle('عروض الأسعار | Ships Control');
+    this.title.setTitle('عروض الأسعار | Falcon Shipping');
     this.load();
   }
 

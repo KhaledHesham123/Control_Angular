@@ -60,6 +60,7 @@ import { VesselProfile } from '../core/ship.types';
               </dl>
               <div class="row">
                 <button type="button" class="btn btn-sm btn-primary" (click)="open(v)">فتح لوحة السفينة</button>
+                <button type="button" class="btn btn-sm" (click)="particulars(v)"><sc-icon name="file" /> مواصفات السفينة</button>
                 <button type="button" class="btn btn-sm" (click)="print(v)"><sc-icon name="print" /> بطاقة المواصفات</button>
                 @if (s.can('fleet')) {
                   <button type="button" class="btn btn-sm" (click)="toggle(v)">{{ v.availableForCharter ? 'إلغاء الإتاحة' : 'إتاحة للتأجير' }}</button>
@@ -148,6 +149,11 @@ export class ShFleet {
     void this.router.navigate(['/ship']);
   }
 
+  particulars(v: VesselProfile): void {
+    this.s.selectVessel(v.id);
+    void this.router.navigate(['/ship/particulars', v.id]);
+  }
+
   print(v: VesselProfile): void {
     particularsPrint(v, this.s.state().data[v.id]?.certificates ?? []);
   }
@@ -157,9 +163,13 @@ export class ShFleet {
   }
 
   add(): void {
-    this.s.addVessel(this.newName);
+    const id = this.s.addVessel(this.newName);
+    const profile = this.s.vessels().find((vessel) => vessel.id === id);
     this.adding = false;
     this.newName = '';
-    void this.router.navigate(['/ship/particulars']);
+    if (!profile) return;
+    this.s.createParticulars(profile).subscribe((ok) => {
+      if (ok) void this.router.navigate(['/ship/particulars', id]);
+    });
   }
 }

@@ -1,8 +1,8 @@
 import { Component, computed, inject } from '@angular/core';
-import { dailyBurn, gaugeOf, kindGauge, num, round, tanksOf, today, uid } from '../core/ship-calc';
+import { gaugeOf, kindGauge, num, round, today, voyageFuelOutlook } from '../core/ship-calc';
 import { dateLabel, fmt, usd } from '../core/ship-format';
 import { ShipStore } from '../core/ship-store';
-import { Tank, TANK_KIND_LABEL, TankKind } from '../core/ship.types';
+import { Tank, TANK_KIND_LABEL, TANK_SINGLE_NAME, TankKind } from '../core/ship.types';
 
 const KINDS: TankKind[] = ['hfo', 'mgo', 'lube', 'water'];
 
@@ -24,14 +24,11 @@ interface BunkerForm {
       <div class="page-head">
         <div>
           <h1>الخزانات والوقود</h1>
-          <p>المتبقي بالطن في كل خزان. الاستهلاك اليومي بيتخصم من التقرير اليومي، والتزويد بيزود الخزان ويتحسب على تكلفة الرحلة.</p>
+          <p>خزان واحد لكل نوع. استهلاك الوقود والديزل والزيوت محسوب على الرحلة من أولها لآخرها، والكمية الحالية تتقاس على هذا المعدل.</p>
         </div>
         <div class="actions">
           @if (s.can('bunker')) {
             <button type="button" class="btn btn-primary" (click)="openBunker()"><sc-icon name="fuel" /> تسجيل تزويد (Bunkering)</button>
-          }
-          @if (s.can('fleet')) {
-            <button type="button" class="btn" (click)="openTank()"><sc-icon name="plus" /> خزان جديد</button>
           }
         </div>
       </div>
@@ -42,11 +39,11 @@ interface BunkerForm {
             <h2>{{ k.label }}</h2>
             <span class="muted small">
               الإجمالي <b class="num">{{ fmt(k.g.current, 1) }}</b> من {{ fmt(k.g.max, 0) }} طن
-              @if (k.days !== null) { · يكفي ~{{ fmt(k.days, 0) }} يوم }
+              @if (k.outlook.lasts !== null) { · يكفي ~{{ fmt(k.outlook.lasts, 0) }} يوم }
             </span>
           </div>
-          <div class="card-body grid auto">
-            @for (t of k.tanks; track t.id) {
+          <div class="card-body">
+            @if (k.tank; as t) {
               <div class="tank-card">
                 <div class="between row">
                   <b>{{ t.name }}</b>
@@ -54,6 +51,13 @@ interface BunkerForm {
                 </div>
                 <div class="value"><span class="num">{{ fmt(t.current, 2) }}</span> <small class="muted">/ {{ fmt(t.max, 0) }} طن</small></div>
                 <div class="gauge" [class]="'gauge ' + gauge(t).tone"><i [style.width.%]="gauge(t).percent"></i></div>
+                @if (k.outlook.expected !== null) {
+                  <p class="muted small">
+                    الرحلة {{ s.activeVoyage()?.number }} تستهلك <b class="num">{{ fmt(k.outlook.expected, 1) }}</b> طن من أولها لآخرها
+                    ({{ fmt(k.outlook.spanDays, 0) }} يوم) · المعدل <b class="num">{{ fmt(k.outlook.rate, 2) }}</b> طن/يوم
+                    @if (k.outlook.lasts !== null) { · الكمية تكفي <b class="num">{{ fmt(k.outlook.lasts, 0) }}</b> يوم }
+                  </p>
+                }
                 <div class="row">
                   @if (s.can('bunker')) {
                     <button type="button" class="btn btn-sm btn-primary" (click)="openBunker(t.id)"><sc-icon name="plus" /> تزويد</button>
@@ -63,13 +67,16 @@ interface BunkerForm {
                   }
                   @if (s.can('fleet')) {
                     <button type="button" class="btn btn-sm btn-ghost" (click)="openTank(t)" title="تعديل"><sc-icon name="cog" /></button>
-                    <button type="button" class="btn btn-sm btn-ghost btn-danger" (click)="s.deleteTank(t.id)" title="حذف"><sc-icon name="trash" /></button>
                   }
                 </div>
               </div>
-            }
-            @if (!k.tanks.length) {
-              <div class="empty">لا توجد خزانات من هذا النوع.</div>
+            } @else {
+              <div class="empty">
+                لا يوجد خزان لهذا النوع.
+                @if (s.can('fleet')) {
+                  <button type="button" class="btn btn-sm" (click)="createKind(k.kind)">إنشاء {{ label(k.kind) }}</button>
+                }
+              </div>
             }
           </div>
         </section>
@@ -168,17 +175,10 @@ interface BunkerForm {
     @if (tankForm) {
       <div class="modal-back" (click)="tankForm = null">
         <div class="modal narrow" (click)="$event.stopPropagation()">
-          <div class="modal-head"><h3>{{ tankIsNew ? 'خزان جديد' : 'تعديل الخزان' }}</h3></div>
+          <div class="modal-head"><h3>تعديل الخزان</h3></div>
           <div class="modal-body">
             <label class="field"><span>الاسم</span><input type="text" [(ngModel)]="tankForm.name" /></label>
-            <label class="field">
-              <span>النوع</span>
-              <select [(ngModel)]="tankForm.kind">
-                @for (k of kindList; track k) {
-                  <option [value]="k">{{ label(k) }}</option>
-                }
-              </select>
-            </label>
+            <label class="field"><span>النوع</span><input type="text" [value]="label(tankForm.kind)" disabled /></label>
             <label class="field"><span>السعة القصوى (طن)</span><input type="number" min="0" [(ngModel)]="tankForm.max" /></label>
             <label class="field"><span>المستوى الحالي (طن)</span><input type="number" min="0" [(ngModel)]="tankForm.current" /></label>
           </div>
@@ -196,21 +196,28 @@ export class ShTanks {
   readonly fmt = fmt;
   readonly usd = usd;
   readonly dateLabel = dateLabel;
-  readonly kindList = KINDS;
   bunker: BunkerForm | null = null;
   sound: Tank | null = null;
   soundLevel = 0;
   soundNote = '';
   tankForm: Tank | null = null;
-  tankIsNew = false;
 
-  readonly kinds = computed(() =>
-    KINDS.map((kind) => {
+  readonly kinds = computed(() => {
+    const voyage = this.s.activeVoyage();
+    const config = this.s.data().config;
+    const crew = this.s.crewOnBoard().length;
+    return KINDS.map((kind) => {
       const g = kindGauge(this.s.tanks(), kind);
-      const burn = dailyBurn(kind, this.s.data().config, this.s.crewOnBoard().length);
-      return { kind, label: TANK_KIND_LABEL[kind], g, tanks: tanksOf(this.s.tanks(), kind), days: burn > 0 ? g.current / burn : null };
-    }),
-  );
+      const tank = this.s.tanks().find((item) => item.kind === kind) ?? null;
+      return {
+        kind,
+        label: TANK_KIND_LABEL[kind],
+        g,
+        tank,
+        outlook: voyageFuelOutlook(kind, g.current, voyage, config, crew),
+      };
+    });
+  });
 
   readonly bunkerTotal = computed(() => this.s.data().bunkers.reduce((sum, b) => sum + b.qty * b.pricePerTon, 0));
 
@@ -279,9 +286,18 @@ export class ShTanks {
     else this.sound = null;
   }
 
-  openTank(t?: Tank): void {
-    this.tankIsNew = !t;
-    this.tankForm = t ? { ...t } : { id: uid('tk'), name: '', kind: 'hfo', current: 0, max: 50 };
+  openTank(t: Tank): void {
+    this.tankForm = { ...t };
+  }
+
+  createKind(kind: TankKind): void {
+    this.s.saveTank({
+      id: kind,
+      name: TANK_SINGLE_NAME[kind],
+      kind,
+      current: 0,
+      max: kind === 'hfo' ? 1150 : kind === 'mgo' ? 360 : kind === 'lube' ? 95 : 420,
+    });
   }
 
   saveTank(): void {

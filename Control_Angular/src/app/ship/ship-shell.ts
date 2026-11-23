@@ -18,7 +18,7 @@ export class ShipShell implements OnInit {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
-  readonly open = signal(false);
+  readonly open = signal(typeof window !== 'undefined' && window.matchMedia('(min-width: 961px)').matches);
   private readonly url = signal(this.router.url);
 
   /** عدد الطلبات اللي محتاجة إجراء من الدور الحالي. */
@@ -53,14 +53,14 @@ export class ShipShell implements OnInit {
   }
 
   ngOnInit(): void {
-    this.title.setTitle('إدارة السفن | Ships Control');
+    this.title.setTitle('إدارة السفن | Falcon Shipping');
     this.router.events
       .pipe(
         filter((e): e is NavigationEnd => e instanceof NavigationEnd),
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe(() => {
-        this.open.set(false);
+        if (!window.matchMedia('(min-width: 961px)').matches) this.open.set(false);
         this.url.set(this.router.url);
       });
   }

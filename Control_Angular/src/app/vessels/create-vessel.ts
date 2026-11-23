@@ -36,7 +36,7 @@ export class CreateVessel implements OnInit {
   selectedUserIds: string[] = [];
 
   ngOnInit(): void {
-    this.title.setTitle('Create Vessel | Ships Control');
+    this.title.setTitle('Create Vessel | Falcon Shipping');
     this.loadUsers();
   }
 

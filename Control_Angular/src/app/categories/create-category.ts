@@ -35,7 +35,7 @@ export class CreateCategory implements OnInit {
   selectedProductIds: string[] = [];
 
   ngOnInit(): void {
-    this.title.setTitle('Create Category | Ships Control');
+    this.title.setTitle('Create Category | Falcon Shipping');
     this.loadProducts();
     this.loadParents();
   }

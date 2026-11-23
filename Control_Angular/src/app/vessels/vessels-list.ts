@@ -32,7 +32,7 @@ export class VesselsList implements OnInit {
   includeInactive = false;
 
   ngOnInit(): void {
-    this.title.setTitle('Vessel Management | Ships Control');
+    this.title.setTitle('Vessel Management | Falcon Shipping');
     this.loadVessels();
   }
 

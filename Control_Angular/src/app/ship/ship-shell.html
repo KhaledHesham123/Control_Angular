@@ -56,11 +56,12 @@
   <aside class="rail" aria-label="قائمة السفينة">
     <div class="rail-top">
       <div class="rail-brand">
-        <span class="rail-mark"><sc-icon name="anchor" /></span>
+        <span class="rail-mark"><img src="falcon-shipping.png" alt="" /></span>
         <div>
-          <small>SHIPS CONTROL</small>
+          <small>FALCON SHIPPING</small>
           <strong>مساحة عمل السفن</strong>
         </div>
+        <button type="button" class="rail-close" (click)="open.set(false)" aria-label="إخفاء القائمة"><sc-icon name="x" /></button>
       </div>
       <label class="rail-select">
         <span>السفينة</span>
@@ -108,7 +109,7 @@
 
   <div class="main">
     <header class="sbar">
-      <button type="button" class="rail-toggle" (click)="open.set(!open())" aria-label="القائمة"><sc-icon name="menu" /></button>
+      <button type="button" class="rail-toggle" (click)="open.set(!open())" [attr.aria-expanded]="open()" aria-label="إظهار أو إخفاء القائمة"><sc-icon name="menu" /></button>
       <div class="sbar-ship">
         <sc-icon name="ship" />
         <b>{{ store.vessel().name }}</b>

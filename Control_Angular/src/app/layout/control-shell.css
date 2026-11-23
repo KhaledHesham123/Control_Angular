@@ -70,12 +70,27 @@
 .mark {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  color: #f0d59a;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(240, 213, 154, 0.25);
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
+  flex: none;
+}
+
+.mark img,
+.top-logo,
+.rail-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #fff;
+}
+
+.top-logo {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
 }
 
 .eyebrow {
@@ -373,6 +388,29 @@
 @keyframes fade {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@media (min-width: 961px) {
+  .backdrop {
+    display: none;
+  }
+
+  .shell.menu-open:not(.ship-workspace) {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+
+  .shell.menu-open:not(.ship-workspace) .sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    transform: none;
+  }
+
+  .shell.ship-workspace .sidebar,
+  :host-context([dir='rtl']) .shell.ship-workspace .sidebar {
+    transform: translateX(110%);
+  }
 }
 
 @media (max-width: 560px) {

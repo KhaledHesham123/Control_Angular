@@ -1,9 +1,9 @@
 import { Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
-import { addDays, daysBetween, legsOf, num, round, stopFees, today, uid, voyageCost, voyageRevenue } from '../core/ship-calc';
+import { addDays, daysBetween, legsOf, num, round, stopFees, suggestVoyageConsumption, today, uid, voyageCost, voyageExpectedTons, voyageFuelOutlook, voyageRevenue, voyageSpanDays } from '../core/ship-calc';
 import { dateLabel, fmt, usd } from '../core/ship-format';
 import { ShipMap } from '../core/ship-map';
 import { ShipStore } from '../core/ship-store';
-import { PortStop, STOP_ACTIVITIES, VOYAGE_STATUS_LABEL, Voyage, VoyageStatus } from '../core/ship.types';
+import { CONSUMPTION_KINDS, ConsumptionKind, PortStop, STOP_ACTIVITIES, VOYAGE_STATUS_LABEL, Voyage, VoyageConsumption, VoyageStatus } from '../core/ship.types';
 
 const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b', '#9aa7b0'];
 
@@ -123,6 +123,22 @@ const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b'
               </div>
             </section>
 
+            <section class="card">
+              <div class="card-head"><h3>معدل الاستهلاك المتوقع للرحلة</h3></div>
+              <div class="card-body stack">
+                <p class="muted small">من أول يوم في الرحلة حتى آخر يوم. المعدل اليومي = الكمية المتوقعة ÷ مدة الرحلة، وكمية الخزان تتقاس على هذا المعدل.</p>
+                <div class="kpis">
+                  @for (row of fuelRows(v); track row.kind) {
+                    <div class="kpi" [class.bad]="row.covers === false" [class.ok]="row.covers === true">
+                      <label>{{ row.label }}</label>
+                      <strong class="num">{{ fmt(row.expected, 1) }} طن</strong>
+                      <small>{{ fmt(row.rate, 2) }} طن/يوم · الخزان يكفي {{ row.lasts === null ? '—' : fmt(row.lasts, 0) + ' يوم' }}</small>
+                    </div>
+                  }
+                </div>
+              </div>
+            </section>
+
             @if (s.can('costs')) {
               <div class="grid g2">
                 <section class="card">
@@ -221,6 +237,21 @@ const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b'
               </label>
               <label class="field"><span>تاريخ البداية</span><input type="date" [(ngModel)]="form.startDate" /></label>
               <label class="field"><span>تاريخ النهاية</span><input type="date" [(ngModel)]="form.endDate" /></label>
+              <label class="field"><span>عدد أيام الرحلة</span><input type="number" min="1" step="1" [ngModel]="formSpan()" (ngModelChange)="setSpan($event)" /></label>
+              <div class="field wide">
+                <span>معدل الاستهلاك المتوقع للرحلة (طن) — مدة الرحلة {{ formSpan() }} يوم</span>
+                @for (row of form.consumptions ?? []; track row.kind) {
+                  <div class="row">
+                    <b>{{ consumptionLabel(row.kind) }}</b>
+                    <input type="number" min="0" step="any" [(ngModel)]="row.quantity" (change)="persistConsumption(row)" />
+                    <button type="button" class="btn btn-sm btn-ghost" (click)="removeConsumption(row.kind)" aria-label="حذف"><sc-icon name="trash" /></button>
+                  </div>
+                }
+                <div class="row">
+                  <button type="button" class="btn btn-sm btn-primary" (click)="addConsumption()" [disabled]="!nextConsumption()"><sc-icon name="plus" /> إضافة نوع</button>
+                  <button type="button" class="btn btn-sm" (click)="fillConsumption()">احسب من مدة الرحلة وأرقام التشغيل</button>
+                </div>
+              </div>
               <label class="field wide"><span>ملاحظات</span><input type="text" [(ngModel)]="form.notes" /></label>
             </div>
 
@@ -405,7 +436,117 @@ export class ShVoyages {
     const n = this.s.voyages().length + 1;
     this.form = v
       ? { ...v, stops: v.stops.map((st) => ({ ...st, activities: [...st.activities] })) }
-      : { id: this.s.nextVoyageId(), number: `V-${new Date().getFullYear()}-${String(n).padStart(2, '0')}`, title: '', status: 'planned', startDate: today(), endDate: '', stops: [], notes: '' };
+      : { id: this.s.nextVoyageId(), number: `V-${new Date().getFullYear()}-${String(n).padStart(2, '0')}`, title: '', status: 'planned', startDate: today(), endDate: '', stops: [], notes: '', expectedHfo: 0, expectedMgo: 0, expectedLube: 0, consumptions: [] };
+    if (this.form) {
+      this.form = { ...this.form, consumptions: this.consumptionOf(this.form) };
+    }
+    if (this.isNew && this.form) {
+      this.fillConsumption();
+    }
+  }
+
+  formSpan(): number {
+    return this.form ? voyageSpanDays(this.form) : 1;
+  }
+
+  setSpan(days: number): void {
+    const form = this.form;
+    if (!form?.startDate) return;
+    const span = Math.max(1, Math.round(num(days)));
+    form.endDate = span <= 1 ? form.startDate : addDays(form.startDate, span);
+  }
+
+  fillConsumption(): void {
+    const form = this.form;
+    if (!form) return;
+    const burn = suggestVoyageConsumption(form, this.s.data().config, Math.max(1, this.s.crewOnBoard().length));
+    const gasoline = (this.s.data().config.dailyRates ?? []).find((item) => item.kind === 'Gasoline' && item.motion === 'Sailing')?.tonsPerDay ?? 0;
+    form.consumptions = [
+      { kind: 'HeavyFuel', quantity: burn.hfo },
+      { kind: 'Diesel', quantity: burn.mgo },
+      { kind: 'Water', quantity: burn.water },
+      { kind: 'Lubricant', quantity: burn.lube },
+      { kind: 'Gasoline', quantity: round(gasoline * burn.days, 1) },
+    ];
+    this.applyRows(form);
+  }
+
+  consumptionLabel(kind: ConsumptionKind): string {
+    return CONSUMPTION_KINDS.find((item) => item.id === kind)?.label ?? kind;
+  }
+
+  nextConsumption(): ConsumptionKind | null {
+    const used = new Set((this.form?.consumptions ?? []).map((row) => row.kind));
+    return CONSUMPTION_KINDS.find((item) => !used.has(item.id))?.id ?? null;
+  }
+
+  addConsumption(): void {
+    const form = this.form;
+    const kind = this.nextConsumption();
+    if (!form || !kind) return;
+    form.consumptions = [...(form.consumptions ?? []), { kind, quantity: 0 }];
+  }
+
+  removeConsumption(kind: ConsumptionKind): void {
+    const form = this.form;
+    if (!form) return;
+    form.consumptions = (form.consumptions ?? []).filter((row) => row.kind !== kind);
+    if (!this.isNew) this.s.deleteConsumption(form.id, kind);
+  }
+
+  persistConsumption(row: VoyageConsumption): void {
+    const form = this.form;
+    if (!form || this.isNew) return;
+    const quantity = num(row.quantity);
+    if (quantity <= 0) this.s.deleteConsumption(form.id, row.kind);
+    else this.s.saveConsumption(form.id, row.kind, quantity);
+  }
+
+  private consumptionOf(voyage: Voyage): VoyageConsumption[] {
+    if (voyage.consumptions?.length) return voyage.consumptions.map((row) => ({ kind: row.kind, quantity: num(row.quantity) }));
+    const rows: VoyageConsumption[] = [];
+    if (voyage.expectedHfo > 0) rows.push({ kind: 'HeavyFuel', quantity: voyage.expectedHfo });
+    if (voyage.expectedMgo > 0) rows.push({ kind: 'Diesel', quantity: voyage.expectedMgo });
+    if (voyage.expectedLube > 0) rows.push({ kind: 'Lubricant', quantity: voyage.expectedLube });
+    if (num(voyage.expectedWater) > 0) rows.push({ kind: 'Water', quantity: num(voyage.expectedWater) });
+    return rows;
+  }
+
+  private applyRows(form: Voyage): void {
+    const qty = (kind: ConsumptionKind) => num(form.consumptions?.find((row) => row.kind === kind)?.quantity);
+    form.expectedHfo = qty('HeavyFuel');
+    form.expectedMgo = qty('Diesel');
+    form.expectedLube = qty('Lubricant');
+    form.expectedWater = qty('Water');
+  }
+
+  fuelRows(v: Voyage) {
+    const config = this.s.data().config;
+    const crew = Math.max(1, this.s.crewOnBoard().length);
+    const kinds = ['hfo', 'mgo', 'water', 'lube'] as const;
+    const days = voyageSpanDays(v);
+    const gasoline = (v.consumptions ?? []).find((item) => item.kind === 'Gasoline')?.quantity ?? 0;
+    const rows: { kind: string; label: string; expected: number; rate: number; lasts: number | null; covers: boolean | null }[] = kinds.map((kind) => {
+      const tank = this.s.tanks().find((item) => item.kind === kind);
+      const outlook = voyageFuelOutlook(kind, tank?.current ?? 0, v, config, crew);
+      return {
+        kind,
+        label: kind === 'hfo' ? 'وقود ثقيل' : kind === 'mgo' ? 'ديزل' : kind === 'water' ? 'مياه' : 'زيوت',
+        expected: voyageExpectedTons(v, kind, config, crew),
+        rate: outlook.rate,
+        lasts: outlook.lasts,
+        covers: outlook.coversVoyage,
+      };
+    });
+    rows.push({
+      kind: 'gasoline',
+      label: 'بنزين',
+      expected: gasoline,
+      rate: days ? gasoline / days : 0,
+      lasts: null,
+      covers: null,
+    });
+    return rows;
   }
 
   addStop(): void {
@@ -476,7 +617,13 @@ export class ShVoyages {
       actualFda: num(st.actualFda),
       legNm: st.legNm ? num(st.legNm) : null,
     }));
-    this.s.saveVoyage({ ...f, stops });
+    this.applyRows(f);
+    const consumptions = (f.consumptions ?? []).map((row) => ({ kind: row.kind, quantity: num(row.quantity) })).filter((row) => row.quantity > 0);
+    this.s.saveVoyage({
+      ...f,
+      consumptions,
+      stops,
+    });
     this.selected.set(f.id);
     this.form = null;
   }

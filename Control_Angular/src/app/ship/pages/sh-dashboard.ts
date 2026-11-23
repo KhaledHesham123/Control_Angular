@@ -3,14 +3,13 @@ import { ShipMap } from '../core/ship-map';
 import {
   certState,
   daysBetween,
-  dailyBurn,
   descendantIds,
   gaugeOf,
   kindGauge,
   legsOf,
-  tanksOf,
   today,
   voyageCost,
+  voyageFuelOutlook,
 } from '../core/ship-calc';
 import { certDocStatus } from '../core/ship-certs';
 import { dateLabel, fmt, usd } from '../core/ship-format';
@@ -92,7 +91,7 @@ const POWER_LABEL: Record<string, string> = {
       <div class="grid g-main">
         <section class="card">
           <div class="card-head">
-            <h2>مستويات الخزانات (المتبقي بالطن)</h2>
+            <h2>الوقود والزيوت — خزان واحد لكل نوع</h2>
             <a class="btn btn-sm" routerLink="/ship/tanks">تفاصيل الخزانات</a>
           </div>
           <div class="card-body stack">
@@ -105,19 +104,23 @@ const POWER_LABEL: Record<string, string> = {
                 <div class="between row">
                   <span class="value"><span class="num">{{ fmt(k.g.current, 1) }}</span> <small class="muted">/ {{ fmt(k.g.max, 0) }} {{ k.unit }}</small></span>
                   <span class="muted small">
-                    @if (k.days !== null) {
-                      يكفي تقريباً <b class="num">{{ fmt(k.days, 0) }}</b> يوم · الاستهلاك {{ fmt(k.burn, 2) }} {{ k.unit }}/يوم
+                    @if (k.outlook.expected !== null) {
+                      المتوقع للرحلة <b class="num">{{ fmt(k.outlook.expected, 1) }}</b> طن خلال {{ fmt(k.outlook.spanDays, 0) }} يوم
+                      · المعدل <b class="num">{{ fmt(k.outlook.rate, 2) }}</b> طن/يوم
+                      @if (k.outlook.lasts !== null) {
+                        · الكمية تكفي <b class="num">{{ fmt(k.outlook.lasts, 0) }}</b> يوم
+                      }
+                    } @else if (k.outlook.lasts !== null) {
+                      يكفي تقريباً <b class="num">{{ fmt(k.outlook.lasts, 0) }}</b> يوم · الاستهلاك {{ fmt(k.outlook.rate, 2) }} {{ k.unit }}/يوم
                     } @else {
                       بدون استهلاك مسجل
                     }
                   </span>
                 </div>
                 <div class="gauge" [class]="'gauge ' + k.g.tone"><i [style.width.%]="k.g.percent"></i></div>
-                <div class="legend">
-                  @for (t of k.tanks; track t.id) {
-                    <span>{{ t.name }}: <b class="num" style="all:unset;font-weight:800">{{ fmt(t.current, 1) }}</b></span>
-                  }
-                </div>
+                @if (k.outlook.coversVoyage === false) {
+                  <div class="alert bad">الكمية الحالية لا تغطي باقي الرحلة حسب معدل الاستهلاك المتوقع.</div>
+                }
               </div>
             }
           </div>
@@ -270,10 +273,12 @@ export class ShDashboard {
   readonly kinds = computed(() => {
     const tanks = this.s.tanks();
     const crew = this.s.crewOnBoard().length;
+    const voyage = this.s.activeVoyage();
+    const config = this.s.data().config;
     return KINDS.map((k) => {
       const g = kindGauge(tanks, k.kind);
-      const burn = dailyBurn(k.kind, this.s.data().config, crew);
-      return { ...k, label: TANK_KIND_LABEL[k.kind], g, burn, days: burn > 0 ? g.current / burn : null, tanks: tanksOf(tanks, k.kind) };
+      const outlook = voyageFuelOutlook(k.kind, g.current, voyage, config, crew);
+      return { ...k, label: TANK_KIND_LABEL[k.kind], g, outlook };
     });
   });
 
@@ -306,8 +311,9 @@ export class ShDashboard {
   readonly alerts = computed(() => {
     const out: { text: string; tone: string; icon: string }[] = [];
     for (const k of this.kinds()) {
-      if (k.g.tone === 'bad') out.push({ text: `${k.label}: المتبقي ${fmt(k.g.current, 1)} طن فقط`, tone: 'bad', icon: 'alert' });
-      else if (k.days !== null && k.days < 8) out.push({ text: `${k.label} يكفي ${fmt(k.days, 0)} أيام تقريباً`, tone: 'warn', icon: 'alert' });
+      if (k.outlook.coversVoyage === false) out.push({ text: `${k.label}: الكمية لا تغطي باقي الرحلة`, tone: 'bad', icon: 'alert' });
+      else if (k.g.tone === 'bad') out.push({ text: `${k.label}: المتبقي ${fmt(k.g.current, 1)} طن فقط`, tone: 'bad', icon: 'alert' });
+      else if (k.outlook.lasts !== null && k.outlook.lasts < 8) out.push({ text: `${k.label} يكفي ${fmt(k.outlook.lasts, 0)} أيام تقريباً`, tone: 'warn', icon: 'alert' });
     }
     if (this.low().length) out.push({ text: `${this.low().length} صنف تحت الحد الأدنى — جهّز طلب شراء`, tone: 'warn', icon: 'cart' });
     const certs = this.s.data().certificates;
@@ -349,7 +355,7 @@ export class ShDashboard {
   }
 
   readonly power = computed(() => POWER_LABEL[this.s.data().config.power] ?? '—');
-  readonly mgoBurn = computed(() => dailyBurn('mgo', this.s.data().config, this.s.crewOnBoard().length));
+  readonly mgoBurn = computed(() => this.kinds().find((k) => k.kind === 'mgo')?.outlook.rate ?? 0);
 
   voyageDay(): number {
     const v = this.s.activeVoyage();

@@ -1,4 +1,7 @@
-import { Component, computed, effect, inject, untracked } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, Router } from '@angular/router';
+import { map } from 'rxjs';
 import { certDocStatus, hasData } from '../core/ship-certs';
 import { dateLabel } from '../core/ship-format';
 import { particularsPrint } from '../core/ship-print';
@@ -12,13 +15,17 @@ import { Certificate, VesselProfile } from '../core/ship.types';
     <div class="page">
       <div class="page-head">
         <div>
-          <h1>مواصفات السفينة (Ship Particulars)</h1>
-          <p>البطاقة اللي بتتبعت للمستأجرين: الاسم السابق، التصنيف، الأبعاد، السعات، المحرك والأوناش، مع شهادات السفينة.</p>
+          <h1>مواصفات {{ f.name || 'السفينة' }}</h1>
+          <p>بطاقة هذه السفينة: الاسم السابق، التصنيف، الأبعاد، السعات، المحرك والأوناش، مع شهادات السفينة.</p>
         </div>
         <div class="actions">
+          <a class="btn" routerLink="/ship/fleet"><sc-icon name="back" /> الأسطول</a>
           <button type="button" class="btn" (click)="print()"><sc-icon name="print" /> طباعة / PDF</button>
+          @if (s.can('fleet') && stored()) {
+            <button type="button" class="btn" (click)="remove()"><sc-icon name="trash" /> حذف</button>
+          }
           @if (s.can('fleet')) {
-            <button type="button" class="btn btn-primary" (click)="save()"><sc-icon name="check" /> حفظ المواصفات</button>
+            <button type="button" class="btn btn-primary" (click)="save()"><sc-icon name="check" /> {{ stored() ? 'تعديل المواصفات' : 'إنشاء المواصفات' }}</button>
           }
         </div>
       </div>
@@ -102,15 +109,38 @@ import { Certificate, VesselProfile } from '../core/ship.types';
 })
 export class ShParticulars {
   readonly s = inject(ShipStore);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
   readonly dateLabel = dateLabel;
+  readonly stored = signal(false);
   f: VesselProfile = { ...this.s.vessel() };
+  private readonly routeId = toSignal(this.route.paramMap.pipe(map((params) => params.get('id') ?? '')), {
+    initialValue: this.route.snapshot.paramMap.get('id') ?? '',
+  });
+  private loadedFor = '';
 
   constructor() {
-    // لو المستخدم بدّل السفينة من القائمة (أو اتحفظت من مكان تاني) نعيد تحميل النموذج
     effect(() => {
-      const v = this.s.vessel();
-      untracked(() => (this.f = { ...v }));
+      const id = this.routeId() || this.s.vesselId();
+      untracked(() => this.openShip(id));
     });
+  }
+
+  private openShip(id: string): void {
+    if (!id || this.loadedFor === id) return;
+    this.loadedFor = id;
+    this.s.selectVessel(id);
+    const local = this.s.vessels().find((vessel) => vessel.id === id) ?? this.s.vessel();
+    this.f = { ...local, id };
+    this.s
+      .getParticulars(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((row) => {
+        if (this.loadedFor !== id) return;
+        this.stored.set(!!row);
+        if (row) this.f = { ...this.f, ...row, id };
+      });
   }
 
   readonly mainCerts = computed(() => this.s.data().certificates.filter((c) => c.section === 'cert' && hasData(c)));
@@ -120,7 +150,18 @@ export class ShParticulars {
   }
 
   save(): void {
-    this.s.saveVessel({ ...this.f, lat: Number(this.f.lat), lng: Number(this.f.lng) });
+    const profile = { ...this.f, lat: Number(this.f.lat) || 0, lng: Number(this.f.lng) || 0 };
+    const request = this.stored() ? this.s.updateParticulars(profile) : this.s.createParticulars(profile);
+    request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((ok) => {
+      if (ok) this.stored.set(true);
+    });
+  }
+
+  remove(): void {
+    if (!window.confirm(`حذف مواصفات ${this.f.name}؟`)) return;
+    this.s.deleteParticulars(this.f.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe((ok) => {
+      if (ok) void this.router.navigate(['/ship/fleet']);
+    });
   }
 
   print(): void {

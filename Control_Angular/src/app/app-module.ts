@@ -19,6 +19,8 @@ import { ConfirmRfq } from './rfq/confirm-rfq';
 import { CreateRfq } from './rfq/create-rfq';
 import { RfqEmail } from './rfq/rfq-email';
 import { RfqList } from './rfq/rfq-list';
+import { RfqOffers } from './rfq/rfq-offers';
+import { SupplierBoard } from './suppliers/supplier-board';
 import { CategoryLookup } from './shared/category-lookup';
 import { CreateVessel } from './vessels/create-vessel';
 import { EditVessel } from './vessels/edit-vessel';
@@ -92,6 +94,8 @@ import { ShSettings } from './ship/pages/sh-settings';
     EditCategory,
     Quotations,
     RfqList,
+    RfqOffers,
+    SupplierBoard,
     CreateRfq,
     ConfirmRfq,
     RfqEmail,

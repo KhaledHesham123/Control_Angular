@@ -48,7 +48,7 @@ export class RfqEmail implements OnInit {
   rfqId = '';
 
   ngOnInit(): void {
-    this.title.setTitle('RFQ Email | Ships Control');
+    this.title.setTitle('RFQ Email | Falcon Shipping');
 
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const id = params.get('id')?.trim() ?? '';

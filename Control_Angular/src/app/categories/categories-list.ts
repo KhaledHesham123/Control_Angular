@@ -39,7 +39,7 @@ export class CategoriesList implements OnInit {
   includeInactive = false;
 
   ngOnInit(): void {
-    this.title.setTitle('Category Management | Ships Control');
+    this.title.setTitle('Category Management | Falcon Shipping');
     this.loadCategories();
   }
 

@@ -1,127 +1,112 @@
-<section class="board" dir="ltr" lang="en">
-  <header class="mast">
-    <div>
-      <p class="eyebrow">RFQ</p>
-      <h1>RFQ Requests</h1>
+<div class="ship-app desk" dir="rtl" lang="ar">
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h1>طلبات الشراء</h1>
+        <p>اختار الأصناف من الأقسام وضيفها للسلة. الطلب يتحفظ مسودة، والإدارة تراجعه وتبعته للموردين.</p>
+      </div>
+      <a class="btn btn-primary" routerLink="/rfq/create"><sc-icon name="plus" /> طلب جديد</a>
     </div>
-    <div class="mast-actions">
-      <button type="button" class="mast-btn" (click)="loadRequests()" [disabled]="loading()">Refresh</button>
-      <button type="button" class="mast-btn primary" (click)="create()">Create RFQ</button>
-    </div>
-  </header>
 
-  <div class="toolbar panel">
-    <label>
-      <span>Status</span>
-      <select
-        [ngModel]="statusFilter"
-        (ngModelChange)="onStatusChange($event)"
-        [disabled]="loading()"
-      >
-        <option [ngValue]="''">All statuses</option>
+    @if (error()) {
+      <div class="readonly-note">{{ error() }}</div>
+    }
+
+    <div class="kpis">
+      <div class="kpi" [class.warn]="count(RfqRequestStatus.Draft) > 0">
+        <label>مسودات</label>
+        <strong>{{ count(RfqRequestStatus.Draft) }}</strong>
+      </div>
+      <div class="kpi">
+        <label>عند الموردين / عروض</label>
+        <strong>{{ count(RfqRequestStatus.Sent) + count(RfqRequestStatus.OffersReceived) + count(RfqRequestStatus.Approved) }}</strong>
+      </div>
+      <div class="kpi ok">
+        <label>معتمدة بانتظار الاستلام</label>
+        <strong>{{ count(RfqRequestStatus.AwaitingReceipt) }}</strong>
+      </div>
+      <div class="kpi gold">
+        <label>تم الاستلام</label>
+        <strong>{{ count(RfqRequestStatus.Received) }}</strong>
+      </div>
+    </div>
+
+    <div class="row between">
+      <div class="chips">
+        <button type="button" class="chip" [class.on]="statusFilter === ''" (click)="onStatusChange('')">الكل ({{ items().length }})</button>
         @for (status of statusOptions; track status) {
-          <option [ngValue]="status">{{ statusLabel(status) }}</option>
+          <button type="button" class="chip" [class.on]="statusFilter === status" (click)="onStatusChange(status)">
+            {{ statusLabel(status) }} ({{ count(status) }})
+          </button>
         }
-      </select>
-    </label>
+      </div>
+      <input class="search" type="search" placeholder="بحث بعنوان الطلب أو السفينة" [value]="q" (input)="q = $any($event.target).value" />
+    </div>
 
-    <app-category-lookup
-      label="Category"
-      placeholder="All categories"
-      [categoryId]="categoryId"
-      [disabled]="loading()"
-      (categoryIdChange)="onCategoryChange($event)"
-      (failed)="onCategoryFailed($event)"
-    />
-
-    <label>
-      <span>Vessel</span>
-      <select
-        [ngModel]="vesselId"
-        (ngModelChange)="onVesselChange($event)"
-        [disabled]="loading() || loadingVessels()"
-      >
-        <option value="">All vessels</option>
+    <div class="row">
+      <select [ngModel]="vesselId" (ngModelChange)="onVesselChange($event)" [disabled]="loadingVessels()">
+        <option value="">كل السفن</option>
         @for (vessel of vessels(); track vessel.id) {
           <option [value]="vessel.id">{{ vessel.name }}</option>
         }
       </select>
-    </label>
+      <app-category-lookup
+        label="القسم"
+        placeholder="كل الأقسام"
+        [categoryId]="categoryId"
+        (categoryIdChange)="onCategoryChange($event)"
+        (failed)="onCategoryFailed($event)"
+      />
+      <button type="button" class="btn btn-sm" (click)="loadRequests()" [disabled]="loading()">تحديث</button>
+    </div>
+
+    <section class="card">
+      <div class="card-body flush table-wrap">
+        @if (loading()) {
+          <div class="empty">جار تحميل الطلبات...</div>
+        } @else {
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>الطلب</th>
+                <th>تاريخ التقديم</th>
+                <th>السفينة</th>
+                <th>الأقسام</th>
+                <th>الأصناف</th>
+                <th>الحالة</th>
+                <th>التوريد المتوقع</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of rows(); track item.id) {
+                <tr>
+                  <td><b>{{ item.title || 'طلب شراء' }}</b></td>
+                  <td class="num">{{ submittedAt(item.createdAt) }}</td>
+                  <td>{{ item.vesselName }}</td>
+                  <td>
+                    <div class="chips">
+                      @for (category of item.categories; track category.id) {
+                        <span class="badge muted">{{ categoryLabel(category) }}</span>
+                      }
+                    </div>
+                  </td>
+                  <td class="num">{{ item.itemsCount }}</td>
+                  <td><span [class]="'badge ' + tone(item.status)">{{ statusLabel(item.status) }}</span></td>
+                  <td>{{ item.deliveryDate ? submittedAt(item.deliveryDate) : '—' }}</td>
+                  <td class="end">
+                    <a class="btn btn-sm" [routerLink]="['/rfq', item.id, 'confirm']">مراجعة</a>
+                    <a class="btn btn-sm" [routerLink]="['/rfq', item.id, 'offers']">العروض</a>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          @if (!rows().length) {
+            <div class="empty"><sc-icon name="cart" /> مفيش طلبات بالفلتر ده.</div>
+          }
+        }
+      </div>
+    </section>
   </div>
-
-  @if (error()) {
-    <div class="banner error" role="alert">
-      <p>{{ error() }}</p>
-      <button type="button" (click)="loadRequests()">Retry</button>
-    </div>
-  }
-
-  @if (loading()) {
-    <div class="progress" role="progressbar" aria-label="Loading RFQ requests"></div>
-  } @else if (items().length === 0) {
-    <div class="empty panel">
-      <h2>No RFQ requests</h2>
-      <p>Create an RFQ to see it listed here.</p>
-    </div>
-  } @else {
-    <div class="list">
-      @for (item of items(); track item.id) {
-        <article class="item-card panel">
-          <div class="row">
-            <div class="meta">
-              <h2>{{ item.title }}</h2>
-              <div class="chips">
-                <span class="chip">{{ categoryNames(item.categories) }}</span>
-                <span class="chip vessel">{{ item.vesselName }}</span>
-                <span class="chip qty">{{ statusLabel(item.status) }}</span>
-              </div>
-            </div>
-
-            <div class="stats">
-              <div class="stat">
-                <span class="label">Items</span>
-                <strong>{{ item.itemsCount }}</strong>
-              </div>
-              <div class="stat">
-                <span class="label">Emails</span>
-                <strong>{{ item.supplierEmailsCount }}</strong>
-              </div>
-              @if (isReadyToSend(item.status)) {
-                <button type="button" class="soft" (click)="openEmail(item.id)">Send email</button>
-              } @else {
-                <button type="button" class="soft" (click)="confirm(item.id)">Confirm</button>
-              }
-            </div>
-          </div>
-
-          @if (isDraft(item.status)) {
-            <div class="draft-timer" aria-live="polite">
-              <div class="draft-timer-head">
-                <span class="draft-timer-badge">Draft</span>
-              </div>
-              <div class="draft-timer-units ltr">
-                @for (part of draftAgeParts(item.createdAt); track part.unit) {
-                  <div class="draft-timer-unit">
-                    <strong>{{ part.value }}</strong>
-                    <span>{{ part.unit }}</span>
-                  </div>
-                }
-              </div>
-            </div>
-          }
-
-          @if (item.notes || item.subject) {
-            <div class="details">
-              @if (item.subject) {
-                <p><span class="label">Subject</span> {{ item.subject }}</p>
-              }
-              @if (item.notes) {
-                <p class="desc">{{ item.notes }}</p>
-              }
-            </div>
-          }
-        </article>
-      }
-    </div>
-  }
-</section>
+</div>

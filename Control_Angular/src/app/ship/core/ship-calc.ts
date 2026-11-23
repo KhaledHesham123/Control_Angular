@@ -9,6 +9,7 @@ import {
   ShipConfig,
   Supplier,
   Tank,
+  TANK_SINGLE_NAME,
   TankKind,
   Voyage,
   VesselData,
@@ -126,13 +127,21 @@ export function onBoardCount(crew: CrewMember[]): number {
   return crew.filter((c) => c.status === 'OnBoard').length;
 }
 
+function storedDaily(config: ShipConfig, kind: 'Water' | 'Gasoline' | 'Diesel'): number | null {
+  const motion = config.mode === 'port' ? 'Stopped' : 'Sailing';
+  const row = config.dailyRates?.find((item) => item.kind === kind && item.motion === motion);
+  return row ? row.tonsPerDay : null;
+}
+
 /** الاستهلاك اليومي المتوقع (طن/يوم) لكل نوع حسب وضع السفينة. */
 export function dailyBurn(kind: TankKind, config: ShipConfig, crewOnBoard: number): number {
   const gens = config.power === 'aux_gen' ? config.generators.reduce((s, g) => s + g.tonsPerHour * g.defaultHours, 0) : 0;
   if (kind === 'hfo') {
-    return config.mode === 'sea' ? config.hfoTonsPerDaySea : 0.1;
+    return storedDaily(config, 'Gasoline') ?? (config.mode === 'sea' ? config.hfoTonsPerDaySea : 0.1);
   }
   if (kind === 'mgo') {
+    const diesel = storedDaily(config, 'Diesel');
+    if (diesel != null) return diesel;
     const boiler = config.boilerTonsPerHour * (config.mode === 'sea' ? 6 : 18);
     const port = config.mode === 'port' ? config.mgoTonsPerDayPort : 0;
     return gens + boiler + port;
@@ -140,7 +149,126 @@ export function dailyBurn(kind: TankKind, config: ShipConfig, crewOnBoard: numbe
   if (kind === 'lube') {
     return config.lubeTonsPerHour * (config.mode === 'sea' ? 24 : 12);
   }
-  return (crewOnBoard * config.waterLitersPerPersonDay) / 1000 + 0.4;
+  return storedDaily(config, 'Water') ?? (crewOnBoard * config.waterLitersPerPersonDay) / 1000 + 0.4;
+}
+
+/** عدد أيام الرحلة من تاريخ البداية حتى النهاية (يوم واحد على الأقل). */
+export function voyageSpanDays(voyage: Pick<Voyage, 'startDate' | 'endDate'>): number {
+  if (!voyage.startDate) {
+    return 1;
+  }
+  const end = voyage.endDate && voyage.endDate > voyage.startDate ? voyage.endDate : voyage.startDate;
+  return Math.max(1, daysBetween(voyage.startDate, end) || 1);
+}
+
+/** استهلاك الرحلة المتوقع بالطن: المعدل اليومي في الإبحار × أيام الرحلة. */
+export function suggestVoyageConsumption(
+  voyage: Pick<Voyage, 'startDate' | 'endDate'>,
+  config: ShipConfig,
+  crewOnBoard: number,
+): { days: number; hfo: number; mgo: number; lube: number; water: number } {
+  const days = voyageSpanDays(voyage);
+  const atSea: ShipConfig = { ...config, mode: 'sea' };
+  return {
+    days,
+    hfo: round(dailyBurn('hfo', atSea, crewOnBoard) * days, 1),
+    mgo: round(dailyBurn('mgo', atSea, crewOnBoard) * days, 1),
+    lube: round(dailyBurn('lube', atSea, crewOnBoard) * days, 1),
+    water: round(dailyBurn('water', atSea, crewOnBoard) * days, 1),
+  };
+}
+
+const CONSUMPTION_OF: Record<TankKind, 'HeavyFuel' | 'Diesel' | 'Water' | 'Lubricant'> = {
+  hfo: 'HeavyFuel',
+  mgo: 'Diesel',
+  water: 'Water',
+  lube: 'Lubricant',
+};
+
+export function voyageExpectedTons(voyage: Voyage, kind: TankKind, config: ShipConfig, crewOnBoard: number): number {
+  const fromRows = num(voyage.consumptions?.find((row) => row.kind === CONSUMPTION_OF[kind])?.quantity);
+  const stored = fromRows > 0
+    ? fromRows
+    : kind === 'hfo'
+      ? voyage.expectedHfo
+      : kind === 'mgo'
+        ? voyage.expectedMgo
+        : kind === 'lube'
+          ? voyage.expectedLube
+          : num(voyage.expectedWater);
+  if (stored > 0) {
+    return stored;
+  }
+  if (kind === 'water') {
+    return 0;
+  }
+  const suggested = suggestVoyageConsumption(voyage, config, crewOnBoard);
+  return kind === 'hfo' ? suggested.hfo : kind === 'mgo' ? suggested.mgo : suggested.lube;
+}
+
+/** المعدل اليومي من استهلاك الرحلة، وكم يوم تكفي الكمية الحالية. */
+export function voyageFuelOutlook(
+  kind: TankKind,
+  current: number,
+  voyage: Voyage | null,
+  config: ShipConfig,
+  crewOnBoard: number,
+): { expected: number | null; spanDays: number; rate: number; lasts: number | null; coversVoyage: boolean | null } {
+  if (!voyage) {
+    const rate = dailyBurn(kind, config, crewOnBoard);
+    return {
+      expected: null,
+      spanDays: 0,
+      rate,
+      lasts: rate > 0 ? current / rate : null,
+      coversVoyage: null,
+    };
+  }
+  const spanDays = voyageSpanDays(voyage);
+  const expected = voyageExpectedTons(voyage, kind, config, crewOnBoard);
+  if (expected <= 0) {
+    const rate = dailyBurn(kind, config, crewOnBoard);
+    return {
+      expected: null,
+      spanDays,
+      rate,
+      lasts: rate > 0 ? current / rate : null,
+      coversVoyage: null,
+    };
+  }
+  const rate = spanDays > 0 ? expected / spanDays : 0;
+  const lasts = rate > 0 ? current / rate : null;
+  const end = voyage.endDate && voyage.endDate >= today() ? voyage.endDate : voyage.startDate;
+  const remaining = Math.max(0, daysBetween(today(), end));
+  return {
+    expected,
+    spanDays,
+    rate,
+    lasts,
+    coversVoyage: lasts == null ? null : lasts + 0.05 >= remaining,
+  };
+}
+
+export function collapseTanks(tanks: Tank[]): Tank[] {
+  const kinds: TankKind[] = ['hfo', 'mgo', 'lube', 'water'];
+  return kinds.flatMap((kind) => {
+    const list = tanks.filter((tank) => tank.kind === kind);
+    if (!list.length) {
+      return [];
+    }
+    if (list.length === 1 && list[0].id === kind) {
+      return list;
+    }
+    return [
+      {
+        id: kind,
+        name: TANK_SINGLE_NAME[kind],
+        kind,
+        current: round(list.reduce((sum, tank) => sum + num(tank.current), 0), 2),
+        max: round(list.reduce((sum, tank) => sum + num(tank.max), 0), 2),
+      },
+    ];
+  });
 }
 
 /* ───────────── الطاقم ───────────── */

@@ -2,8 +2,8 @@
   <header class="mast">
     <div>
       <p class="eyebrow">RFQ</p>
-      <h1>Confirm RFQ</h1>
-      <p class="lede">Review and edit the request before confirming.</p>
+      <h1>مراجعة طلب الشراء</h1>
+      <p class="lede">الأدمن يقدر يزود صنف أو يشيله أو يغير الكمية، وبعدين يوافق.</p>
     </div>
     <button type="button" class="ghost" (click)="back()">Back to list</button>
   </header>
@@ -18,7 +18,7 @@
   @if (loading()) {
     <div class="progress" role="progressbar" aria-label="Loading RFQ"></div>
   } @else if (detail(); as current) {
-    <form class="panel" (ngSubmit)="submit()" novalidate>
+    <form class="panel" (ngSubmit)="save(false)" novalidate>
       <div class="summary">
         <div>
           <h2>{{ current.title }}</h2>
@@ -42,54 +42,12 @@
           />
         </label>
         <label>
-          <span>Status</span>
-          <select name="status" [(ngModel)]="status" [disabled]="submitting()">
-            @for (option of statusOptions; track option) {
-              <option [ngValue]="option">{{ statusLabel(option) }}</option>
-            }
-          </select>
+          <span>تاريخ تقديم الطلب</span>
+          <input class="ltr" type="text" [value]="submittedAt(current.createdAt)" readonly />
         </label>
         <label>
-          <span>Start Date</span>
-          <input
-            id="field-startDate"
-            name="startDate"
-            class="ltr"
-            type="date"
-            [(ngModel)]="startDate"
-            (ngModelChange)="onDatesChanged()"
-            [class.invalid]="isInvalid('startDate')"
-            [disabled]="submitting()"
-          />
-          <small class="field-hint">Leave empty to use today's UTC date.</small>
-        </label>
-        <label>
-          <span>Delivery Date</span>
-          <input
-            id="field-deliveryDate"
-            name="deliveryDate"
-            class="ltr"
-            type="date"
-            [(ngModel)]="deliveryDate"
-            (ngModelChange)="onDatesChanged()"
-            [class.invalid]="isInvalid('deliveryDate')"
-            [disabled]="submitting()"
-            required
-          />
-        </label>
-        <label>
-          <span>Latest Delivery Date</span>
-          <input
-            id="field-latestDeliveryDate"
-            name="latestDeliveryDate"
-            class="ltr"
-            type="date"
-            [(ngModel)]="latestDeliveryDate"
-            (ngModelChange)="onDatesChanged()"
-            [class.invalid]="isInvalid('latestDeliveryDate')"
-            [disabled]="submitting()"
-            required
-          />
+          <span>الحالة</span>
+          <input type="text" [value]="statusLabel(current.status)" readonly />
         </label>
       </div>
 
@@ -100,8 +58,20 @@
 
       <section class="items">
         <div class="items-head">
-          <h3>Items</h3>
+          <h3>الأصناف</h3>
           <span class="muted">{{ items.length }}</span>
+        </div>
+        <div class="item-fields">
+          <label>
+            <span>إضافة صنف</span>
+            <select name="productToAdd" [(ngModel)]="productToAdd" [disabled]="submitting()">
+              <option value="">اختر صنفاً من أقسام الطلب</option>
+              @for (product of catalog(); track product.id) {
+                <option [value]="product.id">{{ product.name }}</option>
+              }
+            </select>
+          </label>
+          <button type="button" class="ghost" (click)="addProduct()" [disabled]="submitting()">إضافة</button>
         </div>
 
         @if (items.length === 0) {
@@ -115,6 +85,7 @@
                     <strong>{{ item.name }}</strong>
                     <p class="muted ltr">{{ item.code || item.itemNo }} · {{ item.unit }}</p>
                   </div>
+                  <button type="button" class="ghost" (click)="removeItem(i)" [disabled]="submitting()">شيل</button>
                   @if (shelfLifeText(item); as life) {
                     <span class="shelf-meta ltr">
                       <span class="shelf-label">Shelf life</span>
@@ -157,9 +128,12 @@
       </section>
 
       <div class="actions">
-        <button type="button" class="ghost" (click)="back()" [disabled]="submitting()">Cancel</button>
-        <button type="submit" class="primary" [disabled]="submitting()">
-          {{ submitting() ? 'Saving...' : 'Confirm RFQ' }}
+        <button type="button" class="ghost" (click)="back()" [disabled]="submitting()">رجوع</button>
+        <button type="button" class="ghost" (click)="openOffers()" [disabled]="submitting()">العروض</button>
+        <button type="button" class="ghost" (click)="openEmail()" [disabled]="submitting()">PDF والإرسال</button>
+        <button type="button" class="ghost" (click)="save(false)" [disabled]="submitting()">حفظ كمسودة</button>
+        <button type="button" class="primary" (click)="save(true)" [disabled]="submitting()">
+          {{ submitting() ? 'جار الحفظ...' : 'موافقة' }}
         </button>
       </div>
     </form>

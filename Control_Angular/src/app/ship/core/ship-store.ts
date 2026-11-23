@@ -1,11 +1,18 @@
-import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { Observable, of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
+import { API_BASE_URL } from '../../core/api.config';
+import { Result } from '../../core/api.model';
 import { ShipFiles } from './ship-files';
 import {
   activeLines,
   addDays,
+  collapseTanks,
   groupsOf,
   num,
   round,
+  suggestVoyageConsumption,
   today,
   uid,
 } from './ship-calc';
@@ -15,9 +22,11 @@ import {
   CargoClient,
   Category,
   Certificate,
+  ConsumptionKind,
   CrewCert,
   CrewMember,
   DailyLog,
+  DailyRate,
   Expense,
   GroupApproval,
   MoveKind,
@@ -36,6 +45,7 @@ import {
   ShipRole,
   ShipState,
   ShipUser,
+  StatusLogEntry,
   Supplier,
   Tank,
   TankKind,
@@ -44,9 +54,7 @@ import {
   Voyage,
 } from './ship.types';
 
-const STORAGE_KEY = 'ships-control.ship.state';
-const VESSEL_KEY = 'ships-control.ship.vessel';
-const ROLE_KEY = 'ships-control.ship.role';
+const SHIP_API = `${API_BASE_URL}/Ship`;
 
 export interface DailyInput {
   date: string;
@@ -71,9 +79,12 @@ export interface NewRequestLine {
 @Injectable({ providedIn: 'root' })
 export class ShipStore {
   private readonly files = inject(ShipFiles);
-  readonly state = signal<ShipState>(this.load());
-  readonly vesselId = signal<string>(this.loadVessel());
-  readonly role = signal<ShipRole>(this.loadRole());
+  private readonly http = inject(HttpClient);
+  private loaded = true;
+  private readonly opening = buildSeed();
+  readonly state = signal<ShipState>(this.opening);
+  readonly vesselId = signal<string>(this.opening.vessels[0]?.id ?? '');
+  readonly role = signal<ShipRole>('Admin');
   readonly toast = signal<Toast | null>(null);
 
   readonly vessels = computed(() => this.state().vessels);
@@ -85,7 +96,7 @@ export class ShipStore {
 
   readonly vessel = computed<VesselProfile>(() => {
     const s = this.state();
-    return s.vessels.find((v) => v.id === this.vesselId()) ?? s.vessels[0];
+    return s.vessels.find((v) => v.id === this.vesselId()) ?? s.vessels[0] ?? emptyVessel('', '…');
   });
   readonly data = computed<VesselData>(() => this.state().data[this.vessel().id] ?? emptyVesselData());
 
@@ -113,63 +124,143 @@ export class ShipStore {
   });
 
   constructor() {
-    effect(() => {
-      const snapshot = this.state();
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-      } catch {
-        /* التخزين ممتلئ — نكمل بالذاكرة فقط */
-      }
-    });
-    effect(() => {
-      try {
-        localStorage.setItem(VESSEL_KEY, this.vesselId());
-        localStorage.setItem(ROLE_KEY, this.role());
-      } catch {
-        /* ignore */
-      }
-    });
+    this.refresh();
   }
 
   /* ───────────── تحميل وحفظ ───────────── */
 
-  private load(): ShipState {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as ShipState;
-        if (parsed?.version === STATE_VERSION && parsed.vessels?.length) {
-          return parsed;
+  private static blank(): ShipState {
+    return {
+      version: STATE_VERSION,
+      vessels: [],
+      categories: [],
+      products: [],
+      suppliers: [],
+      ports: [],
+      users: [],
+      data: {},
+    };
+  }
+
+  private refresh(): void {
+    let params = new HttpParams();
+    if (this.vesselId()) {
+      params = params.set('vesselId', this.vesselId());
+    }
+    this.http.get<Result<ShipState>>(`${SHIP_API}/Board`, { params }).subscribe({
+      next: (result) => {
+        if (result.succeeded && result.data?.vessels?.length) {
+          this.applyServerState(result);
         }
+      },
+      error: () => undefined,
+    });
+  }
+
+  private send(method: 'put' | 'post' | 'delete', path: string, body?: unknown, query?: Record<string, string | number>): void {
+    let params = new HttpParams();
+    const vesselCode = this.vessel().id;
+    const fleetWide = path.startsWith('Catalog/') || path.startsWith('Suppliers') || path.startsWith('Ports') || path === 'Fleet/Particulars' || path.startsWith('Fleet/Users');
+    if (!fleetWide && vesselCode) {
+      params = params.set('vesselCode', vesselCode);
+    }
+    for (const [key, value] of Object.entries(query ?? {})) {
+      params = params.set(key, String(value));
+    }
+    const url = `${SHIP_API}/${path}`;
+    const request =
+      method === 'delete'
+        ? this.http.delete<Result<boolean>>(url, { params })
+        : method === 'post'
+          ? this.http.post<Result<boolean>>(url, body ?? {}, { params })
+          : this.http.put<Result<boolean>>(url, body ?? {}, { params });
+    request.subscribe({
+      next: (result) => {
+        if (!result?.succeeded) {
+          this.notify(result?.messages?.join(' ') || 'الخادم لم يحفظ العملية.', 'bad');
+        }
+      },
+      error: () => this.notify('تعذر الاتصال بالخادم لحفظ العملية.', 'bad'),
+    });
+  }
+
+  private applyServerState(result: Result<ShipState>, fallback = ''): void {
+    if (!result.succeeded || !result.data?.vessels?.length) {
+      this.loaded = true;
+      if (fallback) {
+        this.notify(result.messages?.join(' ') || fallback, 'bad');
       }
-    } catch {
-      /* نرجع للبيانات التجريبية */
+      return;
     }
-    return buildSeed();
+    const normalized = this.normalizeBoard(result.data);
+    this.loaded = false;
+    this.state.set(normalized.board);
+    if (!normalized.board.vessels.some((vessel) => vessel.id === this.vesselId())) {
+      this.vesselId.set(normalized.board.vessels[0]?.id ?? '');
+    }
+    this.loaded = true;
   }
 
-  private loadVessel(): string {
-    try {
-      return localStorage.getItem(VESSEL_KEY) || '11';
-    } catch {
-      return '11';
+  private normalizeBoard(board: ShipState): { board: ShipState; changed: boolean } {
+    let changed = false;
+    const data: ShipState['data'] = {};
+    for (const [key, vesselData] of Object.entries(board.data ?? {})) {
+      const tanks = collapseTanks(vesselData.tanks ?? []);
+      const kindById = new Map((vesselData.tanks ?? []).map((tank) => [tank.id, tank.kind]));
+      const bunkers = (vesselData.bunkers ?? []).map((record) => {
+        const kind = kindById.get(record.tankId);
+        return kind && kind !== record.tankId ? { ...record, tankId: kind } : record;
+      });
+      const crew = (vesselData.crew ?? []).filter((member) => member.status === 'OnBoard').length || 1;
+      const voyages = (vesselData.voyages ?? []).map((voyage) => {
+        const rows = voyage.consumptions ?? [];
+        if (rows.length) {
+          const qty = (kind: ConsumptionKind) => num(rows.find((row) => row.kind === kind)?.quantity);
+          return {
+            ...voyage,
+            consumptions: rows.map((row) => ({ kind: row.kind, quantity: num(row.quantity) })),
+            expectedHfo: qty('HeavyFuel'),
+            expectedMgo: qty('Diesel'),
+            expectedLube: qty('Lubricant'),
+            expectedWater: qty('Water'),
+          };
+        }
+        const hasRate = num(voyage.expectedHfo) > 0 || num(voyage.expectedMgo) > 0 || num(voyage.expectedLube) > 0 || num(voyage.expectedWater) > 0;
+        if (hasRate) {
+          return {
+            ...voyage,
+            expectedHfo: num(voyage.expectedHfo),
+            expectedMgo: num(voyage.expectedMgo),
+            expectedLube: num(voyage.expectedLube),
+            expectedWater: num(voyage.expectedWater),
+          };
+        }
+        const burn = suggestVoyageConsumption(voyage, vesselData.config, crew);
+        return { ...voyage, expectedHfo: burn.hfo, expectedMgo: burn.mgo, expectedLube: burn.lube };
+      });
+      if (
+        tanks.length !== (vesselData.tanks ?? []).length ||
+        bunkers.some((record, index) => record.tankId !== vesselData.bunkers[index]?.tankId) ||
+        voyages.some((voyage, index) => voyage.expectedHfo !== vesselData.voyages[index]?.expectedHfo)
+      ) {
+        changed = true;
+      }
+      data[key] = { ...vesselData, tanks, bunkers, voyages };
     }
-  }
-
-  private loadRole(): ShipRole {
-    try {
-      const role = localStorage.getItem(ROLE_KEY) as ShipRole | null;
-      return role && role in ROLE_PERMS ? role : 'Admin';
-    } catch {
-      return 'Admin';
-    }
+    return { board: { ...board, data }, changed };
   }
 
   resetDemo(): void {
-    this.state.set(buildSeed());
-    this.vesselId.set('11');
-    void this.files.clear().catch(() => undefined);
-    this.notify('تمت إعادة البيانات التجريبية.', 'ok');
+    this.http.post<Result<ShipState>>(`${SHIP_API}/Reset`, {}).subscribe({
+      next: () => {
+        const seed = buildSeed();
+        this.state.set(seed);
+        this.vesselId.set(seed.vessels[0]?.id ?? '');
+        this.loaded = true;
+        this.notify('رجعت بيانات الشاشة التجريبية، من غير زرعها في قاعدة البيانات.');
+      },
+      error: () => this.notify('تعذر مسح بيانات السيرفر.', 'bad'),
+    });
   }
 
   /* ───────────── أدوات عامة ───────────── */
@@ -199,11 +290,20 @@ export class ShipStore {
   }
 
   private patch(fn: (d: VesselData) => VesselData): void {
+    if (!this.loaded) {
+      return;
+    }
     const id = this.vessel().id;
+    if (!id) {
+      return;
+    }
     this.state.update((s) => ({ ...s, data: { ...s.data, [id]: fn(s.data[id] ?? emptyVesselData()) } }));
   }
 
   private patchRoot(fn: (s: ShipState) => ShipState): void {
+    if (!this.loaded) {
+      return;
+    }
     this.state.update(fn);
   }
 
@@ -211,7 +311,75 @@ export class ShipStore {
 
   saveVessel(profile: VesselProfile): void {
     this.patchRoot((s) => ({ ...s, vessels: s.vessels.map((v) => (v.id === profile.id ? { ...profile } : v)) }));
+    this.send('put', 'Fleet/Particulars', profile);
     this.notify('تم حفظ مواصفات السفينة.');
+  }
+
+  getParticulars(id: string): Observable<VesselProfile | null> {
+    return this.http.get<Result<VesselProfile>>(`${SHIP_API}/Fleet/Particulars/${encodeURIComponent(id)}`).pipe(
+      map((result) => (result.succeeded && result.data ? { ...result.data, id: result.data.id || id } : null)),
+      catchError(() => of(null)),
+    );
+  }
+
+  createParticulars(profile: VesselProfile): Observable<boolean> {
+    this.rememberVessel(profile);
+    return this.http.post<Result<boolean>>(`${SHIP_API}/Fleet/Particulars`, profile).pipe(
+      map((result) => this.done(result, 'تم إنشاء مواصفات السفينة.')),
+      catchError(() => this.failed()),
+    );
+  }
+
+  updateParticulars(profile: VesselProfile): Observable<boolean> {
+    this.rememberVessel(profile);
+    return this.http.put<Result<boolean>>(`${SHIP_API}/Fleet/Particulars/${encodeURIComponent(profile.id)}`, profile).pipe(
+      map((result) => this.done(result, 'تم تعديل مواصفات السفينة.')),
+      catchError(() => this.failed()),
+    );
+  }
+
+  deleteParticulars(id: string): Observable<boolean> {
+    return this.http.delete<Result<boolean>>(`${SHIP_API}/Fleet/Particulars/${encodeURIComponent(id)}`).pipe(
+      map((result) => {
+        if (!result?.succeeded) {
+          this.notify(result?.messages?.join(' ') || 'الخادم لم يحذف المواصفات.', 'bad');
+          return false;
+        }
+        this.patchRoot((s) => {
+          const data = { ...s.data };
+          delete data[id];
+          return { ...s, vessels: s.vessels.filter((vessel) => vessel.id !== id), data };
+        });
+        if (this.vesselId() === id) this.vesselId.set(this.state().vessels[0]?.id ?? '');
+        this.notify('تم حذف مواصفات السفينة.', 'warn');
+        return true;
+      }),
+      catchError(() => this.failed()),
+    );
+  }
+
+  private rememberVessel(profile: VesselProfile): void {
+    this.patchRoot((s) => ({
+      ...s,
+      vessels: s.vessels.some((vessel) => vessel.id === profile.id)
+        ? s.vessels.map((vessel) => (vessel.id === profile.id ? { ...profile } : vessel))
+        : [...s.vessels, profile],
+      data: s.data[profile.id] ? s.data : { ...s.data, [profile.id]: emptyVesselData() },
+    }));
+  }
+
+  private done(result: Result<boolean>, message: string): boolean {
+    if (!result?.succeeded) {
+      this.notify(result?.messages?.join(' ') || 'الخادم لم يحفظ العملية.', 'bad');
+      return false;
+    }
+    this.notify(message);
+    return true;
+  }
+
+  private failed(): Observable<boolean> {
+    this.notify('تعذر الاتصال بالخادم لحفظ العملية.', 'bad');
+    return of(false);
   }
 
   addVessel(name: string): string {
@@ -222,7 +390,6 @@ export class ShipStore {
       data: { ...s.data, [id]: emptyVesselData() },
     }));
     this.vesselId.set(id);
-    this.notify('تمت إضافة السفينة. أكمل مواصفاتها من صفحة المواصفات.');
     return id;
   }
 
@@ -234,6 +401,7 @@ export class ShipStore {
       ...s,
       categories: exists ? s.categories.map((c) => (c.id === cat.id ? cat : c)) : [...s.categories, cat],
     }));
+    this.send('put', 'Catalog/Categories', cat);
     this.notify('تم حفظ القسم.');
   }
 
@@ -246,6 +414,7 @@ export class ShipStore {
       return 'القسم يحتوي أصنافاً. انقلها أو احذفها أولاً.';
     }
     this.patchRoot((st) => ({ ...st, categories: st.categories.filter((c) => c.id !== id) }));
+    this.send('delete', `Catalog/Categories/${id}`);
     this.notify('تم حذف القسم.');
     return null;
   }
@@ -256,11 +425,13 @@ export class ShipStore {
       ...s,
       products: exists ? s.products.map((p) => (p.id === product.id ? product : p)) : [...s.products, product],
     }));
+    this.send('put', 'Catalog/Products', product);
     this.notify(exists ? 'تم تحديث الصنف.' : 'تمت إضافة الصنف — سيظهر للسفن عند إنشاء الطلبات.');
   }
 
   deleteProduct(id: string): void {
     this.patchRoot((s) => ({ ...s, products: s.products.map((p) => (p.id === id ? { ...p, active: false } : p)) }));
+    this.send('delete', `Catalog/Products/${id}`);
     this.notify('تم إيقاف الصنف (يبقى في السجلات السابقة).');
   }
 
@@ -272,6 +443,7 @@ export class ShipStore {
       const suppliers = exists ? s.suppliers.map((x) => (x.id === supplier.id ? supplier : x)) : [...s.suppliers, supplier];
       return { ...s, suppliers, ports: s.ports.map((p) => ({ ...p, supplierIds: suppliers.filter((x) => x.portIds.includes(p.id)).map((x) => x.id) })) };
     });
+    this.send('put', 'Suppliers', supplier);
     this.notify('تم حفظ المورد.');
   }
 
@@ -281,6 +453,7 @@ export class ShipStore {
       suppliers: s.suppliers.filter((x) => x.id !== id),
       ports: s.ports.map((p) => ({ ...p, supplierIds: p.supplierIds.filter((x) => x !== id) })),
     }));
+    this.send('delete', `Suppliers/${id}`);
     this.notify('تم حذف المورد.');
   }
 
@@ -293,6 +466,8 @@ export class ShipStore {
           : x,
       ),
     }));
+    const review = this.suppliers().find((item) => item.id === supplierId)?.reviews[0];
+    if (review) this.send('post', `Suppliers/${supplierId}/Reviews`, review);
     this.notify('تمت إضافة التقييم.');
   }
 
@@ -312,6 +487,7 @@ export class ShipStore {
         }),
       };
     });
+    this.send('put', 'Ports', port);
     this.notify('تم حفظ الميناء.');
   }
 
@@ -321,6 +497,7 @@ export class ShipStore {
       ports: s.ports.filter((p) => p.id !== id),
       suppliers: s.suppliers.map((x) => ({ ...x, portIds: x.portIds.filter((p) => p !== id) })),
     }));
+    this.send('delete', `Ports/${id}`);
     this.notify('تم حذف الميناء.');
   }
 
@@ -364,6 +541,8 @@ export class ShipStore {
         ...d.movements,
       ],
     }));
+    this.send('put', 'Inventory/Stock', undefined, { productCode: productId, quantity: balance });
+    this.send('post', 'Inventory/Movements', this.movements()[0]);
     this.notify(`تم صرف ${amount} ${product.unit} من «${product.name}» — الرصيد ${balance}.`);
     return null;
   }
@@ -396,6 +575,8 @@ export class ShipStore {
         ...d.movements,
       ],
     }));
+    this.send('put', 'Inventory/Stock', undefined, { productCode: productId, quantity: balance });
+    this.send('post', 'Inventory/Movements', this.movements()[0]);
     if (!silent) {
       this.notify(`تم استلام ${amount} ${product.unit} في «${product.name}» — الرصيد ${balance}.`);
     }
@@ -430,6 +611,8 @@ export class ShipStore {
         ...d.movements,
       ],
     }));
+    this.send('put', 'Inventory/Stock', undefined, { productCode: productId, quantity: value });
+    this.send('post', 'Inventory/Movements', this.movements()[0]);
     this.notify('تم تحديث الرصيد بعد الجرد.');
     return null;
   }
@@ -479,6 +662,9 @@ export class ShipStore {
       bunkers: [record, ...d.bunkers],
       movements: [this.tankMove(tank, 'bunker', amount, balance, `${supplier} — ${port} (فاتورة ${invoice || '—'})`, date), ...d.movements],
     }));
+    this.send('put', 'Tanks', { ...tank, current: round(balance, 2) });
+    this.send('post', 'Tanks/Bunker', record);
+    this.send('post', 'Inventory/Movements', this.movements()[0]);
     this.notify(`تم تزويد ${amount} طن في «${tank.name}» بتكلفة $${Math.round(amount * num(price)).toLocaleString('en-US')}.`);
     return null;
   }
@@ -493,20 +679,27 @@ export class ShipStore {
       tanks: d.tanks.map((t) => (t.id === tankId ? { ...t, current: value } : t)),
       movements: [this.tankMove(tank, 'adjust', Math.abs(value - tank.current), value, note || 'قياس فعلي للخزان (Sounding)', today()), ...d.movements],
     }));
+    this.send('put', 'Tanks', { ...tank, current: value });
+    this.send('post', 'Inventory/Movements', this.movements()[0]);
     this.notify('تم تحديث مستوى الخزان.');
     return null;
   }
 
   saveTank(tank: Tank): void {
+    const saved = { ...tank, id: tank.kind };
     this.patch((d) => ({
       ...d,
-      tanks: d.tanks.some((t) => t.id === tank.id) ? d.tanks.map((t) => (t.id === tank.id ? tank : t)) : [...d.tanks, tank],
+      tanks: d.tanks.some((t) => t.kind === tank.kind)
+        ? d.tanks.map((t) => (t.kind === tank.kind ? saved : t))
+        : [...d.tanks, saved],
     }));
+    this.send('put', 'Tanks', saved);
     this.notify('تم حفظ الخزان.');
   }
 
   deleteTank(id: string): void {
     this.patch((d) => ({ ...d, tanks: d.tanks.filter((t) => t.id !== id) }));
+    this.send('delete', `Tanks/${id}`);
     this.notify('تم حذف الخزان.');
   }
 
@@ -568,13 +761,69 @@ export class ShipStore {
       config: { ...d.config, mode: input.mode },
       movements: [...moves, ...d.movements],
     }));
+    this.send('post', 'Operations/Daily', log);
+    for (const tank of tanks) this.send('put', 'Tanks', tank);
     this.notify('تم حفظ التقرير اليومي وخصم الاستهلاك من الخزانات.');
     return null;
   }
 
   saveConfig(config: ShipConfig): void {
-    this.patch((d) => ({ ...d, config: { ...config, generators: config.generators.map((g) => ({ ...g })) } }));
+    const current = this.data().config.mode;
+    this.patch((d) => ({ ...d, config: { ...config, mode: current, generators: config.generators.map((g) => ({ ...g })) } }));
+    this.send('put', 'Operations/Config', { ...config, mode: current });
     this.notify('تم حفظ أرقام التشغيل.');
+  }
+
+  applyDailyRates(rates: DailyRate[]): void {
+    this.patch((d) => ({ ...d, config: { ...d.config, dailyRates: rates.map((item) => ({ ...item })) } }));
+  }
+
+  dailyRates(): Observable<DailyRate[]> {
+    const vesselCode = this.vessel().id;
+    return this.http.get<Result<DailyRate[]>>(`${SHIP_API}/Operations/DailyRates`, { params: new HttpParams().set('vesselCode', vesselCode) }).pipe(
+      map((result) => (result.succeeded && result.data ? result.data : [])),
+      catchError(() => of([])),
+    );
+  }
+
+  saveDailyRate(rate: DailyRate, silent = false): void {
+    const rates = this.data().config.dailyRates ?? [];
+    const next = rates.some((item) => item.kind === rate.kind && item.motion === rate.motion)
+      ? rates.map((item) => (item.kind === rate.kind && item.motion === rate.motion ? { ...rate } : item))
+      : [...rates, { ...rate }];
+    this.patch((d) => ({ ...d, config: { ...d.config, dailyRates: next } }));
+    this.send('put', 'Operations/DailyRates', rate);
+    if (!silent) this.notify('تم حفظ المعدل اليومي.');
+  }
+
+  deleteDailyRate(kind: string, motion: string): void {
+    this.patch((d) => ({
+      ...d,
+      config: { ...d.config, dailyRates: (d.config.dailyRates ?? []).filter((item) => item.kind !== kind || item.motion !== motion) },
+    }));
+    this.send('delete', 'Operations/DailyRates', undefined, { kind, motion });
+  }
+
+  statusLog(): Observable<StatusLogEntry[]> {
+    const vesselCode = this.vessel().id;
+    return this.http.get<Result<StatusLogEntry[]>>(`${SHIP_API}/Operations/StatusLog`, { params: new HttpParams().set('vesselCode', vesselCode) }).pipe(
+      map((result) => (result.succeeded && result.data ? result.data : [])),
+      catchError(() => of([])),
+    );
+  }
+
+  changeShipStatus(mode: 'sea' | 'port'): Observable<boolean> {
+    const previous = this.data().config.mode;
+    if (previous === mode) return of(true);
+    this.patch((d) => ({ ...d, config: { ...d.config, mode } }));
+    const params = new HttpParams().set('vesselCode', this.vessel().id).set('mode', mode);
+    return this.http.put<Result<boolean>>(`${SHIP_API}/Operations/Status`, {}, { params }).pipe(
+      map((result) => this.done(result, 'تم تسجيل حالة السفينة.')),
+      catchError(() => {
+        this.patch((d) => ({ ...d, config: { ...d.config, mode: previous } }));
+        return this.failed();
+      }),
+    );
   }
 
   /* ───────────── طلبات الشراء ───────────── */
@@ -635,11 +884,12 @@ export class ShipStore {
       events: [{ at: today(), by: this.actor(), text: submit ? 'تم إنشاء الطلب وإرساله للإدارة' : 'تم حفظ الطلب كمسودة' }],
     };
     this.patch((d) => ({ ...d, requests: [req, ...d.requests] }));
+    this.send('put', 'Requests', { ...req, vesselId: this.vessel().id });
     this.notify(submit ? `تم إرسال الطلب ${no} للإدارة.` : `تم حفظ المسودة ${no}.`);
     return id;
   }
 
-  private mutateRequest(id: string, fn: (r: Requisition) => Requisition, event?: string): void {
+  private mutateRequest(id: string, fn: (r: Requisition) => Requisition, event?: string, path = 'Requests/Lines'): void {
     this.patch((d) => ({
       ...d,
       requests: d.requests.map((r) => {
@@ -649,6 +899,10 @@ export class ShipStore {
         return { ...next, events: ev, status: this.derive({ ...next, events: ev }) };
       }),
     }));
+    const request = this.requests().find((item) => item.id === id);
+    if (request) {
+      this.send('post', path, { ...request, vesselId: this.vessel().id });
+    }
   }
 
   /** حالة الطلب بعد العمليات اللاحقة للإرسال. */
@@ -669,22 +923,22 @@ export class ShipStore {
   }
 
   submitRequest(id: string): void {
-    this.mutateRequest(id, (r) => ({ ...r, status: 'submitted' }), 'تم إرسال الطلب للإدارة');
+    this.mutateRequest(id, (r) => ({ ...r, status: 'submitted' }), 'تم إرسال الطلب للإدارة', 'Requests/Submit');
     this.notify('تم إرسال الطلب للإدارة.');
   }
 
   cancelRequest(id: string): void {
-    this.mutateRequest(id, (r) => ({ ...r, status: 'cancelled' }), 'تم إلغاء الطلب');
+    this.mutateRequest(id, (r) => ({ ...r, status: 'cancelled' }), 'تم إلغاء الطلب', 'Requests/Cancel');
     this.notify('تم إلغاء الطلب.', 'warn');
   }
 
   markReady(id: string): void {
-    this.mutateRequest(id, (r) => ({ ...r, status: r.sends.length || r.offers.length ? this.derive({ ...r, status: 'sent' }) : 'ready' }), 'اعتمدت الإدارة الطلب — جاهز للإرسال للموردين');
+    this.mutateRequest(id, (r) => ({ ...r, status: r.sends.length || r.offers.length ? this.derive({ ...r, status: 'sent' }) : 'ready' }), 'اعتمدت الإدارة الطلب — جاهز للإرسال للموردين', 'Requests/Ready');
     this.notify('الطلب جاهز للإرسال للموردين.');
   }
 
   returnToDraft(id: string): void {
-    this.mutateRequest(id, (r) => ({ ...r, status: 'submitted' }), 'أُعيد الطلب لمراجعة الإدارة');
+    this.mutateRequest(id, (r) => ({ ...r, status: 'submitted' }), 'أُعيد الطلب لمراجعة الإدارة', 'Requests/Draft');
   }
 
   setLineQty(reqId: string, lineId: string, qty: number): void {
@@ -738,6 +992,7 @@ export class ShipStore {
         ],
       }),
       `تم إرسال طلب عرض سعر إلى ${supplier.company}`,
+      'Requests/Send',
     );
   }
 
@@ -753,6 +1008,7 @@ export class ShipStore {
         };
       },
       `سُجّل عرض من ${offer.supplierName}`,
+      'Requests/Offer',
     );
     this.notify('تم تسجيل العرض.');
   }
@@ -762,6 +1018,7 @@ export class ShipStore {
       reqId,
       (r) => ({ ...r, offers: r.offers.filter((o) => o.id !== offerId), approvals: r.approvals.filter((a) => a.offerId !== offerId) }),
       'تم حذف عرض',
+      'Requests/Offer',
     );
   }
 
@@ -771,12 +1028,13 @@ export class ShipStore {
       reqId,
       (r) => ({ ...r, status: r.status === 'ready' || r.status === 'submitted' ? 'sent' : r.status, approvals: [...r.approvals.filter((a) => a.groupId !== groupId), approval] }),
       `تمت الموافقة على عرض — توريد متوقع ${expectedDate}`,
+      'Requests/Approve',
     );
     this.notify('تمت الموافقة على العرض. سيظهر للسفينة موعد التوريد.');
   }
 
   revokeApproval(reqId: string, groupId: string): void {
-    this.mutateRequest(reqId, (r) => ({ ...r, approvals: r.approvals.filter((a) => a.groupId !== groupId) }), 'تم سحب الموافقة على عرض');
+    this.mutateRequest(reqId, (r) => ({ ...r, approvals: r.approvals.filter((a) => a.groupId !== groupId) }), 'تم سحب الموافقة على عرض', 'Requests/Revoke');
   }
 
   receiveGroup(reqId: string, groupId: string, received: Record<string, number>, note: string): void {
@@ -795,6 +1053,7 @@ export class ShipStore {
         lines: r.lines.map((l) => (l.groupId === groupId && !l.removed ? { ...l, received: Math.max(0, num(received[l.id] ?? l.qty)) } : l)),
       }),
       'تأكيد استلام الأصناف وتحديث المخزن',
+      'Requests/Receive',
     );
     this.notify('تم تأكيد الاستلام وتحديث المخزن.');
   }
@@ -806,6 +1065,7 @@ export class ShipStore {
       ...d,
       crew: d.crew.some((c) => c.id === member.id) ? d.crew.map((c) => (c.id === member.id ? member : c)) : [member, ...d.crew],
     }));
+    this.send('put', 'Crew', member);
     this.notify('تم حفظ بيانات الفرد.');
   }
 
@@ -818,26 +1078,31 @@ export class ShipStore {
 
   signOff(id: string, date: string, note: string): void {
     this.crewEvent(id, 'sign-off', date, note || 'نزول من السفينة', 'Former');
+    this.send('post', 'Crew/SignOff', this.crew().find((member) => member.id === id));
     this.notify('تم تسجيل خروج الفرد من السفينة.');
   }
 
   signOn(id: string, date: string, note: string): void {
     this.crewEvent(id, 'sign-on', date, note || 'عودة للخدمة', 'OnBoard');
+    this.send('post', 'Crew/SignOn', this.crew().find((member) => member.id === id));
     this.notify('تم تسجيل صعود الفرد للسفينة.');
   }
 
   startLeave(id: string, date: string, note: string): void {
     this.crewEvent(id, 'leave', date, note || 'إجازة', 'OnLeave');
+    this.send('post', 'Crew/Leave', this.crew().find((member) => member.id === id));
     this.notify('تم تسجيل الإجازة.');
   }
 
   endLeave(id: string, date: string, note: string): void {
     this.crewEvent(id, 'return', date, note || 'عودة من الإجازة', 'OnBoard');
+    this.send('post', 'Crew/Return', this.crew().find((member) => member.id === id));
     this.notify('تم تسجيل العودة من الإجازة.');
   }
 
   deleteCrew(id: string): void {
     this.patch((d) => ({ ...d, crew: d.crew.filter((c) => c.id !== id) }));
+    this.send('delete', `Crew/${id}`);
     this.notify('تم حذف السجل.', 'warn');
   }
 
@@ -846,10 +1111,14 @@ export class ShipStore {
       ...d,
       crew: d.crew.map((c) => (c.id === memberId ? { ...c, certs: [...c.certs, { ...cert, id: uid('cc') }] } : c)),
     }));
+    const member = this.crew().find((item) => item.id === memberId);
+    if (member) this.send('post', 'Crew/Certificates', member);
   }
 
   removeCrewCert(memberId: string, certId: string): void {
     this.patch((d) => ({ ...d, crew: d.crew.map((c) => (c.id === memberId ? { ...c, certs: c.certs.filter((x) => x.id !== certId) } : c)) }));
+    const member = this.crew().find((item) => item.id === memberId);
+    if (member) this.send('post', 'Crew/Certificates', member);
   }
 
   /* ───────────── الرحلات ───────────── */
@@ -863,11 +1132,44 @@ export class ShipStore {
       ...d,
       voyages: d.voyages.some((v) => v.id === voyage.id) ? d.voyages.map((v) => (v.id === voyage.id ? voyage : v)) : [voyage, ...d.voyages],
     }));
+    this.send('put', 'Voyages', voyage);
     this.notify('تم حفظ الرحلة ومسارها.');
+  }
+
+  saveConsumption(voyageId: number, kind: ConsumptionKind, quantity: number): void {
+    this.patch((d) => ({
+      ...d,
+      voyages: d.voyages.map((voyage) => (voyage.id === voyageId ? this.withConsumption(voyage, kind, quantity) : voyage)),
+    }));
+    this.send('put', 'Voyages/Consumption', { voyageId, kind, quantity: num(quantity) });
+  }
+
+  deleteConsumption(voyageId: number, kind: ConsumptionKind): void {
+    this.patch((d) => ({
+      ...d,
+      voyages: d.voyages.map((voyage) => (voyage.id === voyageId ? this.withConsumption(voyage, kind, 0) : voyage)),
+    }));
+    this.send('delete', `Voyages/${voyageId}/Consumption/${kind}`);
+  }
+
+  private withConsumption(voyage: Voyage, kind: ConsumptionKind, quantity: number) {
+    const amount = num(quantity);
+    const rows = (voyage.consumptions ?? []).filter((row) => row.kind !== kind);
+    const consumptions = amount > 0 ? [...rows, { kind, quantity: amount }] : rows;
+    const qty = (name: ConsumptionKind) => num(consumptions.find((row) => row.kind === name)?.quantity);
+    return {
+      ...voyage,
+      consumptions,
+      expectedHfo: qty('HeavyFuel'),
+      expectedMgo: qty('Diesel'),
+      expectedLube: qty('Lubricant'),
+      expectedWater: qty('Water'),
+    };
   }
 
   deleteVoyage(id: number): void {
     this.patch((d) => ({ ...d, voyages: d.voyages.filter((v) => v.id !== id) }));
+    this.send('delete', `Voyages/${id}`);
     this.notify('تم حذف الرحلة.', 'warn');
   }
 
@@ -881,16 +1183,20 @@ export class ShipStore {
         return status === 'active' && v.status === 'active' ? { ...v, status: 'completed', endDate: v.endDate || today() } : v;
       }),
     }));
+    const voyage = this.voyages().find((item) => item.id === id);
+    if (voyage) this.send('post', 'Voyages/Status', voyage);
     this.notify(status === 'active' ? 'بدأت الرحلة — ستُسجل المشتريات والتزويد عليها.' : 'تم تحديث حالة الرحلة.');
   }
 
   addExpense(expense: Omit<Expense, 'id'>): void {
     this.patch((d) => ({ ...d, expenses: [{ ...expense, id: uid('ex') }, ...d.expenses] }));
+    this.send('put', 'Expenses', this.data().expenses[0]);
     this.notify('تم تسجيل المصروف.');
   }
 
   deleteExpense(id: string): void {
     this.patch((d) => ({ ...d, expenses: d.expenses.filter((e) => e.id !== id) }));
+    this.send('delete', `Expenses/${id}`);
   }
 
   /* ───────────── الشهادات والعملاء والشحنات ───────────── */
@@ -900,6 +1206,7 @@ export class ShipStore {
       ...d,
       certificates: d.certificates.some((c) => c.id === cert.id) ? d.certificates.map((c) => (c.id === cert.id ? cert : c)) : [...d.certificates, cert],
     }));
+    this.send('put', 'Certificates', cert);
     this.notify('تم حفظ الشهادة.');
   }
 
@@ -907,6 +1214,7 @@ export class ShipStore {
   deleteCertificate(id: string): void {
     this.patch((d) => ({ ...d, certificates: d.certificates.filter((c) => c.id !== id) }));
     void this.files.delete(id).catch(() => undefined);
+    this.send('delete', `Certificates/${id}`);
     this.notify('تم حذف نوع الشهادة من السجل.', 'warn');
   }
 
@@ -956,6 +1264,8 @@ export class ShipStore {
       const saved = { ...client, id };
       return { ...d, clients: exists ? d.clients.map((c) => (c.id === id ? saved : c)) : [...d.clients, saved] };
     });
+    const saved = this.data().clients.at(-1) ?? client;
+    this.send('put', 'Cargo/Clients', this.data().clients.find((item) => item.company === client.company) ?? saved);
     this.notify('تم حفظ العميل.');
   }
 
@@ -967,6 +1277,8 @@ export class ShipStore {
       const shipments = exists ? d.shipments.map((s) => (s.id === id ? saved : s)) : [saved, ...d.shipments];
       return { ...d, shipments, holds: this.recalcHolds(d, shipments) };
     });
+    this.send('put', 'Cargo/Shipments', this.data().shipments[0]);
+    for (const hold of this.data().holds) this.send('put', 'Holds', hold);
     this.notify('تم حفظ الشحنة وتحديث تحميل العنابر.');
   }
 
@@ -975,6 +1287,8 @@ export class ShipStore {
       const shipments = d.shipments.filter((s) => s.id !== id);
       return { ...d, shipments, holds: this.recalcHolds(d, shipments) };
     });
+    this.send('delete', `Cargo/Shipments/${id}`);
+    for (const hold of this.data().holds) this.send('put', 'Holds', hold);
     this.notify('تم حذف الشحنة.', 'warn');
   }
 
@@ -995,6 +1309,8 @@ export class ShipStore {
 
   setHoldLoad(holdId: string, loaded: number): void {
     this.patch((d) => ({ ...d, holds: d.holds.map((h) => (h.id === holdId ? { ...h, loaded: Math.max(0, Math.min(h.capacity, num(loaded))) } : h)) }));
+    const hold = this.data().holds.find((item) => item.id === holdId);
+    if (hold) this.send('put', 'Holds', hold);
     this.notify('تم تحديث تحميل العنبر.');
   }
 
@@ -1005,11 +1321,13 @@ export class ShipStore {
       ...s,
       users: s.users.some((u) => u.id === user.id) ? s.users.map((u) => (u.id === user.id ? user : u)) : [...s.users, user],
     }));
+    this.send('put', 'Fleet/Users', user);
     this.notify('تم حفظ المستخدم.');
   }
 
   deleteUser(id: string): void {
     this.patchRoot((s) => ({ ...s, users: s.users.filter((u) => u.id !== id) }));
+    this.send('delete', `Fleet/Users/${id}`);
   }
 
   addDays = addDays;

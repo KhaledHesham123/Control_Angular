@@ -35,6 +35,16 @@ export class ControlHome implements OnInit {
       route: '/vessels',
     },
     {
+      title: 'طلبات الشراء',
+      description: 'مسودة، مراجعة الأدمن، عروض الموردين، والمقارنة حتى الاستلام.',
+      route: '/rfq',
+    },
+    {
+      title: 'الموردون',
+      description: 'إضافة مورد وربطه بقسم أو فك الربط.',
+      route: '/suppliers',
+    },
+    {
       title: 'لوحة تحكم السفينة',
       description: 'التوأم الرقمي، المخازن، الرحلات، الموردون، والشهادات.',
       route: '/ship',
@@ -42,7 +52,7 @@ export class ControlHome implements OnInit {
   ];
 
   ngOnInit(): void {
-    this.title.setTitle('Control Center | Ships Control');
+    this.title.setTitle('Control Center | Falcon Shipping');
   }
 
   open(route: string): void {

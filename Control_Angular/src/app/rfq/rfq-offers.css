@@ -1,0 +1,64 @@
+:host { display: block; }
+
+.board {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 20px 64px;
+  color: #1c2430;
+}
+
+.mast, .panel, .banner {
+  border-radius: 18px;
+  border: 1px solid #e6e0d4;
+}
+
+.mast {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: end;
+  padding: 24px;
+  margin-bottom: 16px;
+  color: #f7f3ea;
+  background: linear-gradient(135deg, #0e2238 0%, #16324f 58%, #1a4f5c 100%);
+}
+
+.mast-actions, .actions, .facts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.panel { background: #fffdf8; padding: 18px; margin-bottom: 14px; }
+.summary { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(140px, 1fr)); gap: 12px; }
+.facts span, label span, .muted, .lede, .eyebrow { display: block; color: #667085; font-size: 13px; }
+.mast .lede, .mast .eyebrow { color: #d9c7a2; }
+h1, h2, h3, p { margin: 0 0 8px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; padding: 0; list-style: none; }
+.chips li { background: #f3ecdf; border-radius: 999px; padding: 6px 10px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { border-bottom: 1px solid #eee4d4; padding: 8px; text-align: right; vertical-align: top; }
+.lines, .line { display: grid; gap: 8px; }
+.line { grid-template-columns: 1.4fr 0.6fr 0.6fr; align-items: end; margin-bottom: 8px; }
+label { display: grid; gap: 4px; margin-bottom: 10px; }
+input, select, textarea {
+  border: 1px solid #e0d6c6;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+}
+.check { grid-template-columns: auto 1fr; align-items: center; }
+button, a.ghost {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  background: #efe8db;
+}
+.primary { background: #0e2238; color: #fff; }
+.ghost { background: transparent; color: inherit; border: 1px solid currentColor; }
+.banner { padding: 12px 14px; margin-bottom: 12px; }
+.banner.error { background: #fde8e6; }
+.banner.ok { background: #e7f6ee; }
+.warn { color: #9a3412; display: block; }
+.ltr { direction: ltr; unicode-bidi: isolate; }
+.offer header { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+.progress { height: 4px; background: linear-gradient(90deg, #d4a857, transparent); margin-bottom: 12px; }

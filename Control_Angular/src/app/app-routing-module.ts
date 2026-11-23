@@ -15,6 +15,8 @@ import { ConfirmRfq } from './rfq/confirm-rfq';
 import { CreateRfq } from './rfq/create-rfq';
 import { RfqEmail } from './rfq/rfq-email';
 import { RfqList } from './rfq/rfq-list';
+import { RfqOffers } from './rfq/rfq-offers';
+import { SupplierBoard } from './suppliers/supplier-board';
 import { CreateVessel } from './vessels/create-vessel';
 import { EditVessel } from './vessels/edit-vessel';
 import { VesselsList } from './vessels/vessels-list';
@@ -68,8 +70,10 @@ const routes: Routes = [
       { path: 'categories/edit/:id', component: EditCategory },
       { path: 'categories/edit', redirectTo: 'categories', pathMatch: 'full' },
       { path: 'quotations', component: Quotations },
+      { path: 'suppliers', component: SupplierBoard },
       { path: 'rfq', component: RfqList },
       { path: 'rfq/create', component: CreateRfq },
+      { path: 'rfq/:id/offers', component: RfqOffers },
       { path: 'rfq/:id/confirm', component: ConfirmRfq },
       { path: 'rfq/:id/email', component: RfqEmail },
       { path: 'rfq/:id', component: CreateRfq },
@@ -80,6 +84,7 @@ const routes: Routes = [
           { path: '', pathMatch: 'full', component: ShDashboard },
           { path: 'reports', component: ShReports },
           { path: 'fleet', component: ShFleet },
+          { path: 'particulars/:id', component: ShParticulars },
           { path: 'particulars', component: ShParticulars },
           { path: 'requests', component: ShRequests },
           { path: 'requests/new', component: ShRequestNew },

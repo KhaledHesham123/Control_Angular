@@ -72,6 +72,13 @@ export const TANK_KIND_LABEL: Record<TankKind, string> = {
   water: 'مياه عذبة',
 };
 
+export const TANK_SINGLE_NAME: Record<TankKind, string> = {
+  hfo: 'خزان الوقود الثقيل',
+  mgo: 'خزان الديزل',
+  lube: 'خزان الزيوت',
+  water: 'خزان المياه العذبة',
+};
+
 export interface Tank {
   id: string;
   name: string;
@@ -94,6 +101,23 @@ export interface Generator {
   defaultHours: number;
 }
 
+export type DailyKind = 'Water' | 'Gasoline' | 'Diesel';
+export type DailyMotion = 'Sailing' | 'Stopped';
+
+export interface DailyRate {
+  kind: DailyKind;
+  motion: DailyMotion;
+  tonsPerDay: number;
+}
+
+export interface StatusLogEntry {
+  id: string;
+  fromMode: string;
+  toMode: string;
+  actorName: string;
+  createdAt: string;
+}
+
 export interface ShipConfig {
   mode: 'sea' | 'port';
   power: 'aux_gen' | 'shaft_gen' | 'shore_power';
@@ -104,6 +128,7 @@ export interface ShipConfig {
   foodKgPerPersonDay: number;
   waterLitersPerPersonDay: number;
   generators: Generator[];
+  dailyRates?: DailyRate[];
 }
 
 /* ───────────── الكتالوج ───────────── */
@@ -386,6 +411,21 @@ export interface PortStop {
   legFuelT: number | null;
 }
 
+export type ConsumptionKind = 'HeavyFuel' | 'Diesel' | 'Water' | 'Lubricant' | 'Gasoline';
+
+export interface VoyageConsumption {
+  kind: ConsumptionKind;
+  quantity: number;
+}
+
+export const CONSUMPTION_KINDS: { id: ConsumptionKind; label: string; tank: TankKind }[] = [
+  { id: 'HeavyFuel', label: 'وقود ثقيل', tank: 'hfo' },
+  { id: 'Diesel', label: 'ديزل', tank: 'mgo' },
+  { id: 'Water', label: 'مياه', tank: 'water' },
+  { id: 'Lubricant', label: 'زيوت', tank: 'lube' },
+  { id: 'Gasoline', label: 'بنزين', tank: 'hfo' },
+];
+
 export interface Voyage {
   id: number;
   number: string;
@@ -395,6 +435,12 @@ export interface Voyage {
   endDate: string;
   stops: PortStop[];
   notes: string;
+  /** طن متوقعة للرحلة كلها من أول يوم لآخر يوم. 0 = تُحسب من مدة الرحلة. */
+  expectedHfo: number;
+  expectedMgo: number;
+  expectedLube: number;
+  expectedWater?: number;
+  consumptions?: VoyageConsumption[];
 }
 
 export interface BunkerRecord {

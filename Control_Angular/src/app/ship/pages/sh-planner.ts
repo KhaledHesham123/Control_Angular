@@ -1,6 +1,6 @@
 import { Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { Router } from '@angular/router';
-import { addDays, bunkerScore, planRoute, RoutePlan, round, today, uid } from '../core/ship-calc';
+import { addDays, bunkerScore, planRoute, RoutePlan, round, suggestVoyageConsumption, today, uid } from '../core/ship-calc';
 import { fmt, usd } from '../core/ship-format';
 import { ShipMap } from '../core/ship-map';
 import { ShipStore } from '../core/ship-store';
@@ -303,15 +303,31 @@ export class ShPlanner {
       });
       eta = addDays(eta, stay);
     });
+    const endDate = stops[stops.length - 1]?.etd ?? '';
+    const burn = suggestVoyageConsumption(
+      { startDate: this.startDate, endDate },
+      this.s.data().config,
+      Math.max(1, this.s.crewOnBoard().length),
+    );
     const voyage: Voyage = {
       id: this.s.nextVoyageId(),
       number: `V-${new Date().getFullYear()}-${String(this.s.voyages().length + 1).padStart(2, '0')}`,
       title: plan.names.join(' ← '),
       status: 'planned',
       startDate: this.startDate,
-      endDate: stops[stops.length - 1]?.etd ?? '',
+      endDate,
       stops,
       notes: `مخطط تلقائياً — ${Math.round(plan.nm)} ميل، وقود ${plan.fuelT} طن، تكلفة تقديرية $${plan.total}`,
+      expectedHfo: burn.hfo,
+      expectedMgo: burn.mgo,
+      expectedLube: burn.lube,
+      expectedWater: burn.water,
+      consumptions: [
+        { kind: 'HeavyFuel', quantity: burn.hfo },
+        { kind: 'Diesel', quantity: burn.mgo },
+        { kind: 'Water', quantity: burn.water },
+        { kind: 'Lubricant', quantity: burn.lube },
+      ],
     };
     this.s.saveVoyage(voyage);
     this.creating = false;

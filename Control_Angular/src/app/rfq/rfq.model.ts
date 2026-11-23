@@ -23,16 +23,22 @@ export enum RfqRequestStatus {
   UnderAnalysis = 5,
   DecisionPending = 6,
   Closed = 7,
+  Approved = 8,
+  AwaitingReceipt = 9,
+  Received = 10,
 }
 
 export const RFQ_STATUS_LABELS: Record<RfqRequestStatus, string> = {
-  [RfqRequestStatus.Draft]: 'Draft',
-  [RfqRequestStatus.ReadyToSend]: 'Ready to send',
-  [RfqRequestStatus.Sent]: 'Sent',
-  [RfqRequestStatus.OffersReceived]: 'Offers received',
-  [RfqRequestStatus.UnderAnalysis]: 'Under analysis',
-  [RfqRequestStatus.DecisionPending]: 'Decision pending',
-  [RfqRequestStatus.Closed]: 'Closed',
+  [RfqRequestStatus.Draft]: 'مسودة',
+  [RfqRequestStatus.ReadyToSend]: 'جاهز للإرسال',
+  [RfqRequestStatus.Sent]: 'اترسل للموردين',
+  [RfqRequestStatus.OffersReceived]: 'وصلت عروض',
+  [RfqRequestStatus.UnderAnalysis]: 'تحت المراجعة',
+  [RfqRequestStatus.DecisionPending]: 'بانتظار القرار',
+  [RfqRequestStatus.Closed]: 'مغلق',
+  [RfqRequestStatus.Approved]: 'موافق عليه',
+  [RfqRequestStatus.AwaitingReceipt]: 'اتوافق على العرض · لسه ما استلمش',
+  [RfqRequestStatus.Received]: 'تم الاستلام',
 };
 
 export interface RfqRequestCategoryDto {
@@ -132,7 +138,23 @@ export interface RfqRequestConfirmDto {
   deliveryDate: string | null;
   latestDeliveryDate: string | null;
   status: RfqRequestStatus;
+  createdAt: string;
   items: RfqRequestConfirmItemDto[];
+}
+
+export interface ReviewRfqLineInput {
+  id?: string | null;
+  productId: string;
+  quantity: number;
+  notes?: string | null;
+}
+
+export interface ReviewRfqRequestCommand {
+  id: string;
+  title: string;
+  notes?: string | null;
+  approve: boolean;
+  items: ReviewRfqLineInput[];
 }
 
 export interface RfqRequestEmailSupplierDto {

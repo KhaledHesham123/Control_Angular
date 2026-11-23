@@ -1,0 +1,205 @@
+<section class="board" dir="rtl" lang="ar">
+  <header class="mast">
+    <div>
+      <p class="eyebrow">طلبات الشراء</p>
+      <h1>العروض والمقارنة</h1>
+      <p class="lede">كل طلب له عروضه: السعر، الكمية، والمقارنة مع الطلب ومع متوسط السوق بعد ثلاث عروض.</p>
+    </div>
+    <div class="mast-actions">
+      <button type="button" class="ghost" (click)="back()">القائمة</button>
+      <button type="button" class="ghost" (click)="openEmail()">PDF والإرسال</button>
+    </div>
+  </header>
+
+  @if (error()) {
+    <div class="banner error" role="alert">{{ error() }}</div>
+  }
+  @if (success()) {
+    <div class="banner ok" role="status">{{ success() }}</div>
+  }
+
+  @if (loading()) {
+    <div class="progress" role="progressbar" aria-label="تحميل العروض"></div>
+  } @else if (board(); as current) {
+    <article class="panel summary">
+      <div>
+        <h2>{{ current.title }}</h2>
+        <p class="muted">{{ current.vesselName }}</p>
+      </div>
+      <div class="facts">
+        <div>
+          <span>تاريخ تقديم الطلب</span>
+          <strong class="ltr">{{ submittedAt(current.submittedAt) }}</strong>
+        </div>
+        <div>
+          <span>الحالة</span>
+          <strong>{{ statusLabel(current.status) }}</strong>
+        </div>
+        <div>
+          <span>تاريخ التسليم</span>
+          <strong class="ltr">{{ current.deliveryDate ? submittedAt(current.deliveryDate) : 'لم يحدد' }}</strong>
+        </div>
+      </div>
+    </article>
+
+    <article class="panel">
+      <h3>الموردون الظاهرون من الأقسام</h3>
+      <p class="muted">القسم الابن يجيب موردين القسم الأب كمان.</p>
+      @if (current.suppliers.length === 0) {
+        <p>لا يوجد مورد مربوط بهذه الأقسام. أضفه من شاشة الموردين.</p>
+      } @else {
+        <ul class="chips">
+          @for (supplier of current.suppliers; track supplier.id) {
+            <li>{{ supplier.companyName }}@if (supplier.fromParentCategory) { · من القسم الأب }</li>
+          }
+        </ul>
+      }
+    </article>
+
+    <article class="panel">
+      <h3>مقارنة العروض</h3>
+      @if (current.offers.length === 0) {
+        <p class="muted">لسه مفيش عروض مسجلة على الطلب.</p>
+      } @else {
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>الصنف</th>
+                <th>كمية الطلب</th>
+                @for (offer of current.offers; track offer.id) {
+                  <th>{{ offer.supplierName }}</th>
+                }
+                <th>متوسط السوق</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (line of current.lines; track line.productId) {
+                <tr>
+                  <td>{{ line.name }}</td>
+                  <td class="ltr">{{ line.requestedQuantity }} {{ line.unit }}</td>
+                  @for (offer of current.offers; track offer.id) {
+                    <td>
+                      @if (priceFor(line.productId, offer.id); as price) {
+                        @if (price.missing) {
+                          <span class="warn">ناقص</span>
+                        } @else {
+                          <span class="ltr">{{ price.unitPrice }}</span>
+                          <small>كمية {{ price.quantity }}</small>
+                          @if (price.shortQuantity) { <small class="warn">أقل من الطلب</small> }
+                          @if (price.aboveMarket) { <small class="warn">أعلى من المتوسط</small> }
+                        }
+                      }
+                    </td>
+                  }
+                  <td>
+                    @if (line.marketAverage != null) {
+                      <strong class="ltr">{{ line.marketAverage }}</strong>
+                    } @else {
+                      <small>بعد 3 عروض</small>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </article>
+
+    <article class="panel">
+      <h3>{{ editingId ? 'تعديل العرض' : 'تسجيل عرض مورد' }}</h3>
+      <p class="muted">التسجيل اليدوي. سحب الإيميل وتحليل الذكاء الاصطناعي لسه مش هنا.</p>
+      <label>
+        <span>المورد</span>
+        <select [(ngModel)]="supplierId" [disabled]="saving()">
+          <option value="">اختر مورداً</option>
+          @for (supplier of current.suppliers; track supplier.id) {
+            <option [value]="supplier.id">{{ supplier.companyName }}</option>
+          }
+        </select>
+      </label>
+      <div class="lines">
+        @for (line of lines; track line.productId) {
+          <div class="line">
+            <strong>{{ line.name }}</strong>
+            <label>
+              <span>الكمية</span>
+              <input class="ltr" type="number" min="1" [(ngModel)]="line.quantity" [name]="'qty-' + line.productId" />
+            </label>
+            <label>
+              <span>سعر الوحدة</span>
+              <input class="ltr" type="number" min="0" step="0.01" [(ngModel)]="line.unitPrice" [name]="'price-' + line.productId" />
+            </label>
+          </div>
+        }
+      </div>
+      <label>
+        <span>ملاحظات</span>
+        <textarea rows="2" [(ngModel)]="notes" name="offerNotes"></textarea>
+      </label>
+      <label>
+        <span>رابط ملف العرض</span>
+        <input class="ltr" type="text" [(ngModel)]="pdfPath" name="pdfPath" placeholder="https://..." />
+      </label>
+      <label class="check">
+        <input type="checkbox" [(ngModel)]="asDraft" name="asDraft" />
+        <span>حفظ العرض كمسودة</span>
+      </label>
+      <div class="actions">
+        @if (editingId) {
+          <button type="button" class="ghost" (click)="cancelEdit()" [disabled]="saving()">إلغاء التعديل</button>
+        }
+        <button type="button" class="primary" (click)="saveOffer()" [disabled]="saving()">حفظ العرض</button>
+      </div>
+    </article>
+
+    @for (offer of current.offers; track offer.id) {
+      <article class="panel offer">
+        <header>
+          <div>
+            <h3>{{ offer.supplierName }}</h3>
+            <p class="muted ltr">{{ offer.quotationNo }} · {{ offerLabel(offer.status) }} · {{ offer.total }}</p>
+          </div>
+          <div class="actions">
+            <button type="button" class="ghost" (click)="edit(offer)" [disabled]="saving()">تعديل</button>
+            @if (offer.id !== current.approvedQuotationId) {
+              <button type="button" class="ghost" (click)="remove(offer)" [disabled]="saving()">حذف</button>
+              <button type="button" class="primary" (click)="approve(offer)" [disabled]="saving()">اعتماد</button>
+            }
+          </div>
+        </header>
+        @if (offer.pdfPath) {
+          <a class="ltr" [href]="offer.pdfPath" target="_blank" rel="noopener">ملف العرض</a>
+        }
+        <ul>
+          @for (item of offer.items; track item.id) {
+            <li>{{ item.partName }} · كمية {{ item.quantity }} · سعر {{ item.unitPriceUSD }}</li>
+          }
+        </ul>
+      </article>
+    }
+
+    <article class="panel">
+      <h3>تاريخ التسليم</h3>
+      <label>
+        <span>يحدده الأدمن عند اعتماد العرض</span>
+        <input class="ltr" type="date" [(ngModel)]="deliveryDate" name="deliveryDate" />
+      </label>
+    </article>
+
+    @if (awaitingReceipt()) {
+      <article class="panel">
+        <h3>تأكيد الاستلام</h3>
+        <p class="muted">نفس الطلب بعد تعديل الأدمن وبعد العرض. الكميات النهائية تدخل مخزن الصرف.</p>
+        @for (line of current.lines; track line.productId) {
+          <label class="line">
+            <span>{{ line.name }}</span>
+            <input class="ltr" type="number" min="0" step="0.01" [(ngModel)]="receiveQty[line.productId]" [name]="'recv-' + line.productId" />
+          </label>
+        }
+        <button type="button" class="primary" (click)="receive()" [disabled]="saving()">تأكيد الاستلام</button>
+      </article>
+    }
+  }
+</section>

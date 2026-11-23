@@ -3,6 +3,9 @@ import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Title } from '@angular/platform-browser';
 import { ActivatedRoute, Router } from '@angular/router';
+import { forkJoin, of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
+import { CategoriesService } from '../categories/categories.service';
 import { formatShelfLife } from '../products/product.model';
 import {
   RFQ_STATUS_LABELS,
@@ -23,6 +26,7 @@ type FieldKey = 'title' | 'startDate' | 'deliveryDate' | 'latestDeliveryDate' | 
 })
 export class ConfirmRfq implements OnInit {
   private readonly rfqRequestService = inject(RfqRequestService);
+  private readonly categoriesService = inject(CategoriesService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly title = inject(Title);
   private readonly route = inject(ActivatedRoute);
@@ -49,9 +53,11 @@ export class ConfirmRfq implements OnInit {
   latestDeliveryDate = '';
   status: RfqRequestStatus = RfqRequestStatus.Draft;
   items: RfqRequestConfirmItemDto[] = [];
+  productToAdd = '';
+  readonly catalog = signal<{ id: string; name: string; code: string | null }[]>([]);
 
   ngOnInit(): void {
-    this.title.setTitle('Confirm RFQ | Ships Control');
+    this.title.setTitle('Confirm RFQ | Falcon Shipping');
 
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const id = params.get('id')?.trim() ?? '';
@@ -134,6 +140,7 @@ export class ConfirmRfq implements OnInit {
           };
           this.detail.set(data);
           this.patchForm(data);
+          this.loadCatalog(data.categories ?? []);
         },
         error: (err: HttpErrorResponse) => {
           this.loading.set(false);
@@ -151,8 +158,116 @@ export class ConfirmRfq implements OnInit {
     return this.statusLabels[status as RfqRequestStatus] ?? String(status);
   }
 
-  trackItem(_index: number, item: RfqRequestConfirmItemDto): string {
-    return item.id;
+  trackItem(index: number, item: RfqRequestConfirmItemDto): string {
+    return item.id || item.productId || String(index);
+  }
+
+  submittedAt(value: string | null | undefined): string {
+    if (!value) {
+      return '—';
+    }
+    const date = new Date(/Z$|[+-]\d{2}:\d{2}$/.test(value) ? value : `${value}Z`);
+    if (Number.isNaN(date.getTime())) {
+      return '—';
+    }
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
+  addProduct(): void {
+    const product = this.catalog().find((item) => item.id === this.productToAdd);
+    if (!product) {
+      this.error.set('اختار صنفاً أولاً.');
+      return;
+    }
+    if (this.items.some((item) => item.productId === product.id)) {
+      this.error.set('الصنف موجود في الطلب.');
+      return;
+    }
+    this.items = [
+      ...this.items,
+      {
+        id: '',
+        productId: product.id,
+        categoryId: null,
+        categoryName: null,
+        productDescription: null,
+        itemNo: '',
+        name: product.name,
+        code: product.code,
+        quantity: 1,
+        unit: '',
+        notes: null,
+        shelfLifeValue: null,
+        shelfLifeUnit: null,
+      },
+    ];
+    this.productToAdd = '';
+    this.error.set(null);
+  }
+
+  removeItem(index: number): void {
+    this.items = this.items.filter((_, itemIndex) => itemIndex !== index);
+  }
+
+  openOffers(): void {
+    if (this.rfqId) {
+      void this.router.navigate(['/rfq', this.rfqId, 'offers']);
+    }
+  }
+
+  openEmail(): void {
+    if (this.rfqId) {
+      void this.router.navigate(['/rfq', this.rfqId, 'email']);
+    }
+  }
+
+  save(approve: boolean): void {
+    this.success.set(null);
+    this.error.set(null);
+    if (!this.rfqId) {
+      this.error.set('RFQ id is missing.');
+      return;
+    }
+    if (!this.titleValue.trim()) {
+      this.error.set('عنوان الطلب مطلوب.');
+      return;
+    }
+    if (this.items.length === 0 || this.items.some((item) => !item.quantity || item.quantity < 1)) {
+      this.error.set('كل صنف لازم تكون كميته أكبر من صفر.');
+      return;
+    }
+
+    this.submitting.set(true);
+    this.rfqRequestService
+      .review({
+        id: this.rfqId,
+        title: this.titleValue.trim(),
+        notes: this.notes.trim() || null,
+        approve,
+        items: this.items.map((item) => ({
+          id: item.id || null,
+          productId: item.productId,
+          quantity: Number(item.quantity),
+          notes: item.notes?.trim() || null,
+        })),
+      })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (result) => {
+          this.submitting.set(false);
+          if (!result.succeeded) {
+            this.error.set(result.messages?.join(' ') || 'تعذر حفظ المراجعة.');
+            return;
+          }
+          this.success.set(result.messages?.join(' ') || 'تم الحفظ.');
+          this.loadConfirm();
+        },
+        error: (err: HttpErrorResponse) => {
+          this.submitting.set(false);
+          this.error.set(this.readError(err, 'تعذر حفظ المراجعة.'));
+        },
+      });
   }
 
   submit(): void {
@@ -328,6 +443,39 @@ export class ConfirmRfq implements OnInit {
         el.focus({ preventScroll: true });
       }
     });
+  }
+
+  private loadCatalog(categories: { id: string }[]): void {
+    const ids = [...new Set(categories.map((category) => category.id).filter(Boolean))];
+    if (ids.length === 0) {
+      this.catalog.set([]);
+      return;
+    }
+
+    forkJoin(
+      ids.map((id) =>
+        this.categoriesService.getProducts(id).pipe(
+          map((result) => (result.succeeded ? result.data ?? [] : [])),
+          catchError(() => of([])),
+        ),
+      ),
+    )
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((groups) => {
+        const seen = new Set<string>();
+        const products = groups.flat().filter((product) => {
+          if (!product.isLinked || seen.has(product.id)) {
+            return false;
+          }
+          seen.add(product.id);
+          return true;
+        });
+        this.catalog.set(products.map((product) => ({
+          id: product.id,
+          name: product.name,
+          code: product.code,
+        })));
+      });
   }
 
   private patchForm(data: RfqRequestConfirmDto): void {

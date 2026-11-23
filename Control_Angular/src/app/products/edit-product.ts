@@ -65,7 +65,7 @@ export class EditProduct implements OnInit {
   linkQuantityOnHand = 0;
 
   ngOnInit(): void {
-    this.title.setTitle('Edit Product | Ships Control');
+    this.title.setTitle('Edit Product | Falcon Shipping');
 
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const id = params.get('id')?.trim() ?? '';
