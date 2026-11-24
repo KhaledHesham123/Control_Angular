@@ -1,7 +1,8 @@
 import { Component, computed, inject } from '@angular/core';
-import { gaugeOf, kindGauge, num, round, today, voyageFuelOutlook } from '../core/ship-calc';
+import { bunkerTotal, bunkerUnitPrice, fuelStock, gaugeOf, kindGauge, num, round, today, voyageFuelOutlook } from '../core/ship-calc';
 import { AMANY_VOYAGE_ID } from '../core/ship-amany-ops';
 import { dateLabel, fmt, usd } from '../core/ship-format';
+import { ShipFiles } from '../core/ship-files';
 import { ShipStore } from '../core/ship-store';
 import { BunkerRecord, Tank, TANK_KIND_LABEL, TANK_SINGLE_NAME, TankKind } from '../core/ship.types';
 
@@ -15,7 +16,18 @@ interface BunkerForm {
   port: string;
   invoice: string;
   date: string;
+  taxAmount: number;
+  transportFee: number;
+  fireFightingFee: number;
+  bankFee: number;
+  otherFee: number;
+  dueDate: string;
+  paymentStatus: string;
+  paidBy: string;
+  note: string;
 }
+
+const PAYMENT_STATES = ['مستحقة', 'مدفوعة', 'من ضمن حساب المركب', 'مؤجلة'];
 
 @Component({
   selector: 'sh-tanks',
@@ -133,28 +145,66 @@ interface BunkerForm {
       </section>
 
       <section class="card">
-        <div class="card-head"><h2>سجل التزويد</h2><span class="muted small">الإجمالي {{ usd(bunkerTotal(), 2) }}</span></div>
+        <div class="card-head">
+          <h2>فواتير التعبئة</h2>
+          <span class="muted small">المدفوع {{ usd(paidTotal(), 2) }} · ده خروج نقدية مش مصروف على الرحلة</span>
+        </div>
         <div class="card-body flush table-wrap">
           <table class="tbl">
-            <thead><tr><th>التاريخ</th><th>الخزان</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th><th>المورد</th><th>الميناء</th><th>الفاتورة</th></tr></thead>
+            <thead>
+              <tr>
+                <th>التاريخ</th><th>الخزان</th><th>الكمية</th><th>السعر الأساسي</th><th>الضرايب والرسوم</th>
+                <th>إجمالي الفاتورة</th><th>سعر الوحدة النهائي</th><th>المورد</th><th>الفاتورة</th><th>الاستحقاق</th><th>السداد</th>
+              </tr>
+            </thead>
             <tbody>
               @for (b of s.data().bunkers; track b.id) {
                 <tr>
                   <td>{{ dateLabel(b.date) }}</td>
                   <td>{{ tankName(b.tankId) }}</td>
-                  <td class="num">{{ fmt(b.qty, 1) }} {{ tankUnit(b.tankId) }}</td>
+                  <td class="num">{{ fmt(b.qty, 1) }} {{ b.unit || tankUnit(b.tankId) }}</td>
                   <td class="num">{{ usd(b.pricePerTon, 2) }}</td>
-                  <td class="num"><b>{{ usd(b.qty * b.pricePerTon, 2) }}</b></td>
+                  <td class="num">{{ usd(extras(b), 2) }}</td>
+                  <td class="num"><b>{{ usd(total(b), 2) }}</b></td>
+                  <td class="num"><b>{{ usd(unitPrice(b), 2) }}</b></td>
                   <td>{{ b.supplier }}</td>
-                  <td>{{ b.port }}</td>
                   <td class="small">{{ b.invoice || '—' }}</td>
+                  <td class="small">{{ b.dueDate ? dateLabel(b.dueDate) : '—' }}</td>
+                  <td class="small">{{ b.paymentStatus || '—' }}{{ b.paidBy ? ' — ' + b.paidBy : '' }}</td>
                 </tr>
               }
             </tbody>
           </table>
           @if (!s.data().bunkers.length) {
-            <div class="empty">لا توجد عمليات تزويد.</div>
+            <div class="empty">لا توجد فواتير تعبئة.</div>
           }
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>قيمة المخزون في التانكات</h2>
+          <span class="muted small">المتبقي أصل مش مصروف · القيمة {{ usd(stockValue(), 2) }}</span>
+        </div>
+        <div class="card-body flush table-wrap">
+          <table class="tbl">
+            <thead>
+              <tr><th>الصنف</th><th>المتبقي</th><th>المستهلك على الرحلة</th><th>المستلم</th><th>سعر آخر فاتورة</th><th>تكلفة الاستهلاك</th><th>قيمة المتبقي</th></tr>
+            </thead>
+            <tbody>
+              @for (line of stock(); track line.tankId) {
+                <tr>
+                  <td>{{ line.label }}</td>
+                  <td class="num">{{ fmt(line.rob ?? 0, 1) }} {{ line.unit }}</td>
+                  <td class="num">{{ fmt(line.consumed, 1) }} {{ line.unit }}</td>
+                  <td class="num">{{ fmt(line.received, 1) }} {{ line.unit }}</td>
+                  <td class="num">{{ usd(line.unitPrice, 2) }}</td>
+                  <td class="num"><b>{{ usd(line.cost, 2) }}</b></td>
+                  <td class="num"><b>{{ usd(line.stockValue, 2) }}</b></td>
+                </tr>
+              }
+            </tbody>
+          </table>
         </div>
       </section>
     </div>
@@ -173,8 +223,13 @@ interface BunkerForm {
                   }
                 </select>
               </label>
-              <label class="field"><span>الكمية (طن)</span><input type="number" min="0" step="any" [(ngModel)]="bunker.qty" /></label>
-              <label class="field"><span>سعر الطن (USD)</span><input type="number" min="0" step="any" [(ngModel)]="bunker.price" /></label>
+              <label class="field"><span>الكمية ({{ tankUnit(bunker.tankId) }})</span><input type="number" min="0" step="any" [(ngModel)]="bunker.qty" /></label>
+              <label class="field"><span>السعر الأساسي للوحدة (USD)</span><input type="number" min="0" step="any" [(ngModel)]="bunker.price" /></label>
+              <label class="field"><span>الضريبة (USD)</span><input type="number" min="0" step="any" [(ngModel)]="bunker.taxAmount" /></label>
+              <label class="field"><span>رسوم النقل</span><input type="number" min="0" step="any" [(ngModel)]="bunker.transportFee" /></label>
+              <label class="field"><span>رسوم الإطفاء</span><input type="number" min="0" step="any" [(ngModel)]="bunker.fireFightingFee" /></label>
+              <label class="field"><span>مصاريف البنك</span><input type="number" min="0" step="any" [(ngModel)]="bunker.bankFee" /></label>
+              <label class="field"><span>رسوم أخرى</span><input type="number" min="0" step="any" [(ngModel)]="bunker.otherFee" /></label>
               <label class="field">
                 <span>ميناء التزويد</span>
                 <select [(ngModel)]="bunker.port" (ngModelChange)="onPort()">
@@ -194,13 +249,27 @@ interface BunkerForm {
                 </datalist>
               </label>
               <label class="field"><span>رقم الفاتورة</span><input type="text" [(ngModel)]="bunker.invoice" /></label>
-              <label class="field"><span>التاريخ</span><input type="date" [(ngModel)]="bunker.date" /></label>
+              <label class="field wide"><span>صورة الفاتورة</span><input type="file" accept="application/pdf,image/*" (change)="onInvoice($event)" /></label>
+              <label class="field"><span>تاريخ التعبئة</span><input type="date" [(ngModel)]="bunker.date" /></label>
+              <label class="field"><span>تاريخ الاستحقاق</span><input type="date" [(ngModel)]="bunker.dueDate" /></label>
+              <label class="field">
+                <span>حالة السداد</span>
+                <select [(ngModel)]="bunker.paymentStatus">
+                  <option value="">—</option>
+                  @for (state of states; track state) {
+                    <option [value]="state">{{ state }}</option>
+                  }
+                </select>
+              </label>
+              <label class="field"><span>اللي سدد</span><input type="text" [(ngModel)]="bunker.paidBy" /></label>
+              <label class="field wide"><span>ملاحظة على الفاتورة</span><input type="text" [(ngModel)]="bunker.note" /></label>
             </div>
             <div class="alert"><sc-icon name="info" /> {{ afterBunker() }}</div>
+            <div class="alert"><sc-icon name="info" /> {{ priceNote() }}</div>
           </div>
           <div class="modal-foot">
             <button type="button" class="btn" (click)="bunker = null">إلغاء</button>
-            <button type="button" class="btn btn-primary" (click)="saveBunker()"><sc-icon name="check" /> حفظ وزيادة رصيد الخزان</button>
+            <button type="button" class="btn btn-primary" (click)="saveBunker()"><sc-icon name="check" /> حفظ الفاتورة وزيادة رصيد الخزان</button>
           </div>
         </div>
       </div>
@@ -243,10 +312,13 @@ interface BunkerForm {
 })
 export class ShTanks {
   readonly s = inject(ShipStore);
+  private readonly files = inject(ShipFiles);
   readonly fmt = fmt;
   readonly usd = usd;
   readonly dateLabel = dateLabel;
+  readonly states = PAYMENT_STATES;
   bunker: BunkerForm | null = null;
+  private invoiceFile: File | null = null;
   sound: Tank | null = null;
   soundLevel = 0;
   soundNote = '';
@@ -270,9 +342,23 @@ export class ShTanks {
     });
   });
 
-  readonly bunkerTotal = computed(() => this.s.data().bunkers.reduce((sum, b) => sum + b.qty * b.pricePerTon, 0));
+  readonly paidTotal = computed(() => this.s.data().bunkers.reduce((sum, b) => sum + bunkerTotal(b), 0));
+  readonly stock = computed(() => fuelStock(this.s.data(), this.s.activeVoyage()?.id ?? null));
+  readonly stockValue = computed(() => this.stock().reduce((sum, line) => sum + line.stockValue, 0));
   readonly ledger = computed(() => this.s.tanks().filter((tank) => tank.opening != null));
   readonly ledgerVoyage = computed(() => this.s.voyages().find((voyage) => voyage.id === AMANY_VOYAGE_ID) ?? null);
+
+  total(b: BunkerRecord): number {
+    return bunkerTotal(b);
+  }
+
+  unitPrice(b: BunkerRecord): number {
+    return bunkerUnitPrice(b);
+  }
+
+  extras(b: BunkerRecord): number {
+    return bunkerTotal(b) - num(b.qty) * num(b.pricePerTon);
+  }
 
   label(k: TankKind): string {
     return TANK_KIND_LABEL[k];
@@ -296,8 +382,36 @@ export class ShTanks {
 
   openBunker(tankId?: string): void {
     const t = this.s.tanks().find((x) => x.id === tankId) ?? this.s.tanks().find((x) => x.kind === 'hfo') ?? this.s.tanks()[0];
-    this.bunker = { tankId: t?.id ?? '', qty: 0, price: 0, supplier: '', port: '', invoice: '', date: today() };
+    this.bunker = {
+      tankId: t?.id ?? '',
+      qty: 0,
+      price: 0,
+      supplier: '',
+      port: '',
+      invoice: '',
+      date: today(),
+      taxAmount: 0,
+      transportFee: 0,
+      fireFightingFee: 0,
+      bankFee: 0,
+      otherFee: 0,
+      dueDate: '',
+      paymentStatus: '',
+      paidBy: '',
+      note: '',
+    };
     this.onTank();
+    this.invoiceFile = null;
+  }
+
+  /** السعر اللي الاستهلاك هيتسعّر بيه بعد حفظ الفاتورة دي. */
+  priceNote(): string {
+    const b = this.bunker;
+    if (!b || num(b.qty) <= 0) return 'أدخل الكمية عشان يتحسب سعر الوحدة النهائي.';
+    const gross = num(b.qty) * num(b.price);
+    const extras = num(b.taxAmount) + num(b.transportFee) + num(b.fireFightingFee) + num(b.bankFee) + num(b.otherFee);
+    const final = (gross + extras) / num(b.qty);
+    return `إجمالي الفاتورة ${usd(gross + extras, 2)} · سعر الوحدة النهائي ${usd(final, 2)}. ده السعر اللي استهلاك الأيام الجاية هيتحسب بيه.`;
   }
 
   onTank(): void {
@@ -326,12 +440,35 @@ export class ShTanks {
     return `الرصيد بعد التزويد: ${fmt(Math.min(after, t.max), 1)} من ${fmt(t.max, 0)} طن · التكلفة ${usd(num(b.qty) * num(b.price))}`;
   }
 
-  saveBunker(): void {
+  onInvoice(ev: Event): void {
+    this.invoiceFile = (ev.target as HTMLInputElement).files?.[0] ?? null;
+  }
+
+  async saveBunker(): Promise<void> {
     const b = this.bunker;
     if (!b) return;
-    const err = this.s.bunker(b.tankId, b.qty, b.price, b.supplier, b.port, b.invoice, b.date);
+    let invoiceFile = '';
+    if (this.invoiceFile) {
+      invoiceFile = `bunker-${Date.now().toString(36)}`;
+      await this.files.put(invoiceFile, this.invoiceFile);
+    }
+    const err = this.s.bunker(b.tankId, b.qty, b.price, b.supplier, b.port, b.invoice, b.date, {
+      taxAmount: num(b.taxAmount),
+      transportFee: num(b.transportFee),
+      fireFightingFee: num(b.fireFightingFee),
+      bankFee: num(b.bankFee),
+      otherFee: num(b.otherFee),
+      dueDate: b.dueDate,
+      paymentStatus: b.paymentStatus,
+      paidBy: b.paidBy,
+      note: b.note,
+      invoiceFile,
+    });
     if (err) this.s.notify(err, 'bad');
-    else this.bunker = null;
+    else {
+      this.bunker = null;
+      this.invoiceFile = null;
+    }
   }
 
   openSound(t: Tank): void {

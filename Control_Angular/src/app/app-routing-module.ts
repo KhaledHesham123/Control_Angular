@@ -33,6 +33,7 @@ import { ShTanks } from './ship/pages/sh-tanks';
 import { ShDaily } from './ship/pages/sh-daily';
 import { ShLog } from './ship/pages/sh-log';
 import { ShVoyages } from './ship/pages/sh-voyages';
+import { ShNoon } from './ship/pages/sh-noon';
 import { ShPlanner } from './ship/pages/sh-planner';
 import { ShPorts } from './ship/pages/sh-ports';
 import { ShClients } from './ship/pages/sh-clients';
@@ -93,6 +94,7 @@ const routes: Routes = [
           { path: 'daily', component: ShDaily },
           { path: 'log', component: ShLog },
           { path: 'voyages', component: ShVoyages },
+          { path: 'noon', component: ShNoon },
           { path: 'planner', component: ShPlanner },
           { path: 'ports', component: ShPorts },
           { path: 'clients', component: ShClients },

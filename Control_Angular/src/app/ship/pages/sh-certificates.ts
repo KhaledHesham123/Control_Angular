@@ -275,7 +275,15 @@ export class ShCertificates {
     this.s
       .crew()
       .filter((m) => m.status !== 'Former')
-      .flatMap((m) => m.certs.map((c) => ({ ...c, member: m.name, rank: m.rank })))
+      .flatMap((m) => [
+        { id: m.id + '-passport', name: 'جواز السفر', number: m.passportNo, expiry: m.passportExpiry, member: m.name, rank: m.rank },
+        { id: m.id + '-seaman', name: 'جواز البحار', number: m.seamanBookNo, expiry: m.seamanBookExpiry, member: m.name, rank: m.rank },
+        { id: m.id + '-gmdss', name: 'GMDSS', number: m.gmdssNo, expiry: m.gmdssExpiry, member: m.name, rank: m.rank },
+        ...m.certs
+          .filter((c) => !['جواز سفر', 'جواز بحار', 'جواز السفر', 'جواز البحار', 'GMDSS'].includes(c.name))
+          .map((c) => ({ ...c, member: m.name, rank: m.rank })),
+      ])
+      .filter((c) => c.number || c.expiry)
       .sort((a, b) => daysBetween(today(), a.expiry || '9999-12-31') - daysBetween(today(), b.expiry || '9999-12-31')),
   );
 

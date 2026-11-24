@@ -379,12 +379,20 @@ export class ShDashboard {
       out.push({ text: `${soon.length} شهادة تنتهي خلال 3 شهور: ${soon.slice(0, 3).map((c) => c.title).join('، ')}${soon.length > 3 ? '…' : ''}`, tone: 'warn', icon: 'shield' });
     }
     for (const m of this.s.crewOnBoard()) {
-      for (const c of m.certs) {
+      const docs = [
+        { name: 'جواز السفر', expiry: m.passportExpiry },
+        { name: 'جواز البحار', expiry: m.seamanBookExpiry },
+        { name: 'GMDSS', expiry: m.gmdssExpiry },
+        ...m.certs
+          .filter((c) => !['جواز سفر', 'جواز بحار', 'جواز السفر', 'جواز البحار', 'GMDSS'].includes(c.name))
+          .map((c) => ({ name: c.name, expiry: c.expiry })),
+      ];
+      for (const c of docs) {
         const st = certState(c.expiry);
-        if (st.tone === 'bad') out.push({ text: `${m.name} — ${c.name}: ${st.label}`, tone: 'bad', icon: 'users' });
+        if (st.tone === 'bad' || st.tone === 'warn') out.push({ text: `${m.name} — ${c.name}: ${st.label}`, tone: st.tone, icon: 'users' });
       }
     }
-    return out.slice(0, 8);
+    return out.slice(0, 16);
   });
 
   constructor() {

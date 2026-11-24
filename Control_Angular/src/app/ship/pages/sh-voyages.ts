@@ -2,6 +2,7 @@ import { Component, DestroyRef, ElementRef, computed, effect, inject, signal, vi
 import { addDays, daysBetween, legsOf, num, round, stopFees, suggestVoyageConsumption, today, uid, voyageCost, voyageExpectedTons, voyageFuelOutlook, voyageRevenue, voyageSpanDays } from '../core/ship-calc';
 import { dateLabel, fmt, usd } from '../core/ship-format';
 import { ShipMap } from '../core/ship-map';
+import { ShipFiles } from '../core/ship-files';
 import { ShipStore } from '../core/ship-store';
 import { CONSUMPTION_KINDS, ConsumptionKind, PortStop, STOP_ACTIVITIES, VOYAGE_STATUS_LABEL, Voyage, VoyageConsumption, VoyageStatus } from '../core/ship.types';
 
@@ -185,6 +186,21 @@ const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b'
                     @if (sheet.totalTime) { · الإجمالي {{ sheet.totalTime }} }
                   </div>
                 }
+                <dl class="kv" style="grid-template-columns: 170px 1fr">
+                  <dt>ميناء المغادرة</dt><dd>{{ v.departurePort || '—' }}</dd>
+                  <dt>تاريخ ووقت المغادرة</dt><dd>{{ v.departureAt || '—' }}</dd>
+                  <dt>ميناء الوصول</dt><dd>{{ v.arrivalPort || '—' }}</dd>
+                  <dt>تاريخ ووقت الوصول</dt><dd>{{ v.arrivalAt || 'لم يصل بعد' }}</dd>
+                  <dt>نوع الحمولة</dt><dd>{{ v.cargoType || '—' }}</dd>
+                  <dt>كمية الحمولة</dt><dd class="num">{{ v.cargoQuantity != null ? fmt(v.cargoQuantity, 2) + ' ' + (v.cargoUnit || 'طن') : '—' }}</dd>
+                  <dt>المستأجر</dt><dd>{{ v.charterer || '—' }}</dd>
+                  <dt>الوكيل الملاحي</dt><dd>{{ v.agent || '—' }}</dd>
+                  @if (v.freightAmount != null) {
+                    <dt>النولون</dt><dd class="num">{{ usd(v.freightAmount, 2) }}</dd>
+                  }
+                  <dt>الحالة الحالية</dt>
+                  <dd>{{ v.currentState || '—' }}{{ v.currentStateAt ? ' — ' + dateLabel(v.currentStateAt) : '' }}</dd>
+                </dl>
                 @if (v.notes) { <div class="hint">{{ v.notes }}</div> }
               </div>
             </section>
@@ -194,7 +210,7 @@ const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b'
               <div class="card-body"><div #mapEl class="map sm"></div></div>
               <div class="card-body flush table-wrap">
                 <table class="tbl">
-                  <thead><tr><th>#</th><th>الميناء</th><th>الوصول</th><th>المغادرة</th><th>المرحلة السابقة</th><th>الأنشطة</th><th>رسوم الميناء</th></tr></thead>
+                  <thead><tr><th>#</th><th>الميناء</th><th>الوصول</th><th>المغادرة</th><th>المرحلة السابقة</th><th>الأنشطة</th><th>رسوم الميناء</th><th>التكلفة الفعلية</th></tr></thead>
                   <tbody>
                     @for (st of v.stops; track st.id; let i = $index) {
                       <tr>
@@ -216,7 +232,20 @@ const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b'
                         </td>
                         <td class="num">
                           {{ usd(fees(st)) }}
-                          @if (st.actualFda > 0) { <span class="badge ok">فعلي</span> } @else { <span class="badge muted">تقديري</span> }
+                          @if (st.actualFda > 0) { <span class="badge ok">فعلي</span> } @else { <span class="badge muted">مرجعي</span> }
+                        </td>
+                        <td class="small">
+                          @if (st.actualFda > 0) {
+                            <div class="num"><b>{{ usd(st.actualFda, 2) }}</b></div>
+                            <div class="muted">{{ st.daProvider || '—' }}{{ st.daPaymentStatus ? ' · ' + st.daPaymentStatus : '' }}</div>
+                          } @else {
+                            <span class="muted">لم تُسجَّل</span>
+                          }
+                          @if (s.can('costs')) {
+                            <button type="button" class="btn btn-sm btn-ghost" (click)="openDa(v, st)">
+                              <sc-icon name="edit" /> {{ st.actualFda > 0 ? 'تعديل' : 'إضافة تكلفة الميناء' }}
+                            </button>
+                          }
                         </td>
                       </tr>
                     }
@@ -324,6 +353,46 @@ const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b'
       </div>
     </div>
 
+    @if (da) {
+      <div class="modal-back" (click)="da = null">
+        <div class="modal" (click)="$event.stopPropagation()">
+          <div class="modal-head">
+            <h3>التكلفة الفعلية للميناء — {{ portName(da.stop.portId) }}</h3>
+            <button type="button" class="btn btn-sm btn-ghost" (click)="da = null"><sc-icon name="x" /></button>
+          </div>
+          <div class="modal-body">
+            <p class="muted small">
+              الرسوم المسجلة على الميناء مرجعية للتقدير. هنا تسجّل فاتورة حساب المدفوعات الفعلية، وهي اللي بتدخل في تكلفة الرحلة.
+            </p>
+            <div class="form-grid">
+              <label class="field"><span>المبلغ الفعلي (USD)</span><input type="number" min="0" step="any" [(ngModel)]="da.actualFda" /></label>
+              <label class="field"><span>مورّد حساب المدفوعات</span><input type="text" [(ngModel)]="da.daProvider" /></label>
+              <label class="field"><span>رقم الفاتورة</span><input type="text" [(ngModel)]="da.daInvoice" /></label>
+              <label class="field"><span>تاريخ الفاتورة</span><input type="date" [(ngModel)]="da.daInvoiceDate" /></label>
+              <label class="field"><span>تاريخ الاستحقاق</span><input type="date" [(ngModel)]="da.daDueDate" /></label>
+              <label class="field">
+                <span>حالة السداد</span>
+                <select [(ngModel)]="da.daPaymentStatus">
+                  <option value="">—</option>
+                  @for (state of payStates; track state) {
+                    <option [value]="state">{{ state }}</option>
+                  }
+                </select>
+              </label>
+              <label class="field"><span>اللي سدد</span><input type="text" [(ngModel)]="da.daPaidBy" /></label>
+              <label class="field wide"><span>صورة الفاتورة</span><input type="file" accept="application/pdf,image/*" (change)="onDaInvoice($event)" /></label>
+              <label class="field wide"><span>ملاحظة</span><input type="text" [(ngModel)]="da.daNote" /></label>
+            </div>
+            <div class="alert"><sc-icon name="info" /> الرسوم المرجعية للميناء {{ usd(refFees(da.stop), 2) }} · الفرق {{ usd(num(da.actualFda) - refFees(da.stop), 2) }}</div>
+          </div>
+          <div class="modal-foot">
+            <button type="button" class="btn" (click)="da = null">إلغاء</button>
+            <button type="button" class="btn btn-primary" (click)="saveDa()"><sc-icon name="check" /> حفظ</button>
+          </div>
+        </div>
+      </div>
+    }
+
     @if (form) {
       <div class="modal-back" (click)="form = null">
         <div class="modal wide" (click)="$event.stopPropagation()">
@@ -378,6 +447,18 @@ const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b'
               </label>
               <label class="field"><span>تاريخ البداية</span><input type="date" [(ngModel)]="form.startDate" /></label>
               <label class="field"><span>تاريخ النهاية</span><input type="date" [(ngModel)]="form.endDate" /></label>
+              <label class="field"><span>ميناء المغادرة</span><input type="text" [(ngModel)]="form.departurePort" /></label>
+              <label class="field"><span>تاريخ ووقت المغادرة</span><input type="text" [(ngModel)]="form.departureAt" placeholder="2026-10-12 12:00" /></label>
+              <label class="field"><span>ميناء الوصول</span><input type="text" [(ngModel)]="form.arrivalPort" /></label>
+              <label class="field"><span>تاريخ ووقت الوصول</span><input type="text" [(ngModel)]="form.arrivalAt" /></label>
+              <label class="field"><span>نوع الحمولة</span><input type="text" [(ngModel)]="form.cargoType" /></label>
+              <label class="field"><span>كمية الحمولة</span><input type="number" min="0" step="any" [(ngModel)]="form.cargoQuantity" /></label>
+              <label class="field"><span>وحدة الحمولة</span><input type="text" [(ngModel)]="form.cargoUnit" /></label>
+              <label class="field"><span>المستأجر</span><input type="text" [(ngModel)]="form.charterer" /></label>
+              <label class="field"><span>الوكيل</span><input type="text" [(ngModel)]="form.agent" /></label>
+              <label class="field"><span>النولون (USD)</span><input type="number" min="0" step="any" [(ngModel)]="form.freightAmount" /></label>
+              <label class="field"><span>حالة السفينة في الرحلة</span><input type="text" [(ngModel)]="form.currentState" placeholder="مخطاف" /></label>
+              <label class="field"><span>تاريخ الحالة</span><input type="date" [(ngModel)]="form.currentStateAt" /></label>
               <label class="field"><span>عدد أيام الرحلة</span><input type="number" min="1" step="1" [ngModel]="formSpan()" (ngModelChange)="setSpan($event)" /></label>
               <div class="field wide">
                 <span>الاستهلاك المتوقع لهذه الرحلة فقط (طن) — مدة الرحلة {{ formSpan() }} يوم. المعدل الثابت للسفينة لا يتغير من هنا.</span>
@@ -475,6 +556,7 @@ const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b'
 })
 export class ShVoyages {
   readonly s = inject(ShipStore);
+  private readonly files = inject(ShipFiles);
   readonly usd = usd;
   readonly fmt = fmt;
   readonly dateLabel = dateLabel;
@@ -487,6 +569,20 @@ export class ShVoyages {
   form: Voyage | null = null;
   isNew = false;
   exp: { label: string; amount: number; date: string; note: string } | null = null;
+  readonly payStates = ['مستحقة', 'مدفوعة', 'من ضمن حساب المركب', 'مؤجلة'];
+  readonly num = num;
+  da: {
+    voyage: Voyage;
+    stop: PortStop;
+    actualFda: number;
+    daProvider: string;
+    daInvoice: string;
+    daInvoiceDate: string;
+    daDueDate: string;
+    daPaymentStatus: string;
+    daPaidBy: string;
+    daNote: string;
+  } | null = null;
   draft = { number: '', fromPortId: '', toPortId: '', viaPortIds: [] as string[], viaPick: '', status: 'planned' as VoyageStatus, startDate: today(), endDate: '' };
   formRoute = { fromPortId: '', toPortId: '', viaPortIds: [] as string[], viaPick: '' };
 
@@ -851,6 +947,61 @@ export class ShVoyages {
     f.stops.splice(i + d, 0, x);
   }
 
+  openDa(voyage: Voyage, stop: PortStop): void {
+    this.da = {
+      voyage,
+      stop,
+      actualFda: stop.actualFda,
+      daProvider: stop.daProvider ?? stop.agent ?? '',
+      daInvoice: stop.daInvoice ?? '',
+      daInvoiceDate: stop.daInvoiceDate ?? '',
+      daDueDate: stop.daDueDate ?? '',
+      daPaymentStatus: stop.daPaymentStatus ?? '',
+      daPaidBy: stop.daPaidBy ?? '',
+      daNote: stop.daNote ?? '',
+    };
+  }
+
+  /** الرسوم المرجعية المسجلة على الميناء، من غير الفعلي. */
+  refFees(st: PortStop): number {
+    return num(st.berthFee) + num(st.pilotFee) + num(st.canalFee) + num(st.agencyFee);
+  }
+
+  private daFile: File | null = null;
+
+  onDaInvoice(ev: Event): void {
+    this.daFile = (ev.target as HTMLInputElement).files?.[0] ?? null;
+  }
+
+  async saveDa(): Promise<void> {
+    const d = this.da;
+    if (!d) return;
+    let daInvoiceFile = d.stop.daInvoiceFile ?? '';
+    if (this.daFile) {
+      daInvoiceFile = `da-${d.stop.id}`;
+      await this.files.put(daInvoiceFile, this.daFile);
+    }
+    const stops = d.voyage.stops.map((st) =>
+      st.id === d.stop.id
+        ? {
+            ...st,
+            actualFda: num(d.actualFda),
+            daProvider: d.daProvider,
+            daInvoice: d.daInvoice,
+            daInvoiceDate: d.daInvoiceDate,
+            daDueDate: d.daDueDate,
+            daPaymentStatus: d.daPaymentStatus,
+            daPaidBy: d.daPaidBy,
+            daInvoiceFile,
+            daNote: d.daNote,
+          }
+        : st
+    );
+    this.s.saveVoyage({ ...d.voyage, stops });
+    this.da = null;
+    this.daFile = null;
+  }
+
   toggleAct(st: PortStop, a: string): void {
     const i = st.activities.indexOf(a);
     if (i >= 0) st.activities.splice(i, 1);
@@ -885,6 +1036,8 @@ export class ShVoyages {
     const consumptions = (f.consumptions ?? []).map((row) => ({ kind: row.kind, quantity: num(row.quantity) })).filter((row) => row.quantity > 0);
     this.s.saveVoyage({
       ...f,
+      cargoQuantity: f.cargoQuantity == null ? null : num(f.cargoQuantity),
+      freightAmount: f.freightAmount == null ? null : num(f.freightAmount),
       consumptions,
       stops,
     });

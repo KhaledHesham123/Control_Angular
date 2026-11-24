@@ -509,6 +509,15 @@ export interface PortStop {
   agent: string;
   legNm: number | null;
   legFuelT: number | null;
+  /** تكلفة الميناء الفعلية: مورّد حساب المدفوعات وفاتورته، غير الرسوم المرجعية المسجلة على الميناء. */
+  daProvider?: string;
+  daInvoice?: string;
+  daInvoiceDate?: string;
+  daDueDate?: string;
+  daPaymentStatus?: string;
+  daPaidBy?: string;
+  daInvoiceFile?: string;
+  daNote?: string;
 }
 
 export type ConsumptionKind = 'HeavyFuel' | 'Diesel' | 'Water' | 'Lubricant' | 'Gasoline';
@@ -568,6 +577,19 @@ export interface Voyage {
   expectedWater?: number;
   consumptions?: VoyageConsumption[];
   sheet?: VoyageSheet;
+  departurePort?: string;
+  departureAt?: string;
+  arrivalPort?: string;
+  arrivalAt?: string;
+  cargoType?: string;
+  cargoQuantity?: number | null;
+  cargoUnit?: string;
+  charterer?: string;
+  agent?: string;
+  freightAmount?: number | null;
+  /** حالة السفينة الحالية في الرحلة، مثل مخطاف أو في البحر. */
+  currentState?: string;
+  currentStateAt?: string;
 }
 
 export interface BunkerRecord {
@@ -575,10 +597,28 @@ export interface BunkerRecord {
   date: string;
   tankId: string;
   qty: number;
+  /** السعر الأساسي قبل الضرايب والرسوم. */
   pricePerTon: number;
   supplier: string;
   port: string;
   invoice: string;
+  unit?: string;
+  taxPercent?: number;
+  taxAmount?: number;
+  transportFee?: number;
+  fireFightingFee?: number;
+  bankFee?: number;
+  otherFee?: number;
+  /** إجمالي الفاتورة: الكمية × السعر الأساسي + كل الضرايب والرسوم. */
+  totalAmount?: number;
+  /** سعر الوحدة اللي الاستهلاك بيتسعّر بيه: إجمالي الفاتورة ÷ الكمية. */
+  finalUnitPrice?: number;
+  currency?: string;
+  dueDate?: string;
+  paymentStatus?: string;
+  paidBy?: string;
+  invoiceFile?: string;
+  note?: string;
   /** استهلاك نفس يوم التموين، لو دخل في رقم المستهلك. */
   sameDayUse?: number;
   voyageId: number | null;
@@ -594,6 +634,44 @@ export interface Expense {
   amount: number;
   note: string;
   category?: ExpenseCategory;
+}
+
+export interface NoonReport {
+  id: string;
+  date: string;
+  localTime: string;
+  position: string;
+  status: string;
+  route: string;
+  avgSpeed: number | null;
+  avgRpm: number | null;
+  wind: string;
+  seaSwell: string;
+  distanceToNext: number | null;
+  eta: string;
+  distanceCovered: number | null;
+  passageTime: string;
+  portTime: string;
+  freshWaterRob: number | null;
+  dieselRob: number | null;
+  meLubeRob: number | null;
+  cylLubeRob: number | null;
+  hydOilRob: number | null;
+  waterQty: number;
+  waterCost: number;
+  dieselQty: number;
+  dieselCost: number;
+  meQty: number;
+  meCost: number;
+  cylQty: number;
+  cylCost: number;
+  hydQty: number;
+  hydCost: number;
+  oilCost: number;
+  salaryCost: number;
+  kitchenCost: number;
+  agencyCost: number;
+  voyageId: number | null;
 }
 
 export interface DailyLog {
@@ -711,6 +789,7 @@ export interface VesselData {
   bunkers: BunkerRecord[];
   expenses: Expense[];
   logs: DailyLog[];
+  noonReports: NoonReport[];
   certificates: Certificate[];
   clients: CargoClient[];
   shipments: Shipment[];
@@ -766,6 +845,7 @@ export const SHIP_NAV: NavSection[] = [
     title: 'الرحلات',
     items: [
       { route: '/ship/voyages', label: 'الرحلات وتكلفتها', icon: 'route' },
+      { route: '/ship/noon', label: 'تكلفة الرحلة', icon: 'chart', perm: 'voyages' },
       { route: '/ship/planner', label: 'مخطط المسار والمقارنة', icon: 'compass', perm: 'voyages' },
       { route: '/ship/ports', label: 'الموانئ وأسعار الوقود', icon: 'anchor' },
       { route: '/ship/clients', label: 'العملاء والشحنات', icon: 'users2' },

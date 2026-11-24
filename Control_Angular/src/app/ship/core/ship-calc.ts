@@ -1,5 +1,7 @@
 import {
+  BunkerRecord,
   CrewMember,
+  NoonReport,
   Offer,
   Port,
   PortStop,
@@ -531,12 +533,17 @@ export interface VoyageCost {
   purchasesByGroup: Record<string, number>;
   purchases: number;
   committed: number;
+  /** مصروف الوقود الفعلي = المستهلك في تقارير الظهيرة × سعر آخر فاتورة. */
   bunker: number;
   port: number;
   crew: number;
   other: number;
   total: number;
   days: number;
+  /** المدفوع في فواتير التعبئة. ده خروج نقدية مش مصروف على الرحلة. */
+  bunkerPaid: number;
+  /** قيمة الوقود المتبقي في التانكات كمخزون. */
+  fuelStockValue: number;
 }
 
 export function voyageEnd(v: Voyage): string {
@@ -579,7 +586,7 @@ export function voyageCost(voyage: Voyage, data: VesselData, categories: Categor
   }
   const purchases = Object.values(purchasesByGroup).reduce((s, v) => s + v, 0);
   const end = voyageEnd(voyage);
-  let bunker = data.bunkers.filter((b) => b.voyageId === voyage.id).reduce((s, b) => s + b.qty * b.pricePerTon, 0);
+  let bunker = fuelLedger(data, voyage.id).reduce((s, day) => s + day.cost, 0);
   let port = voyage.stops.reduce((s, st) => s + stopFees(st), 0);
   let sheetCrew = 0;
   let other = 0;
@@ -601,6 +608,8 @@ export function voyageCost(voyage: Voyage, data: VesselData, categories: Categor
     other,
     total: purchases + bunker + port + crew + other,
     days: Math.max(0, daysBetween(voyage.startDate, end)),
+    bunkerPaid: data.bunkers.filter((b) => b.voyageId === voyage.id).reduce((s, b) => s + bunkerTotal(b), 0),
+    fuelStockValue: fuelStock(data, voyage.id).reduce((s, line) => s + line.stockValue, 0),
   };
 }
 
@@ -688,6 +697,145 @@ export function planRoute(
     legs,
     warnings,
   };
+}
+
+/* ───────────── محاسبة الوقود ───────────── */
+
+/** ربط بنود تقرير الظهيرة بخزاناتها، عشان الاستهلاك يتسعّر من فاتورة نفس الخزان. */
+export const FUEL_ITEMS: { tankId: string; label: string; unit: string; rob: keyof NoonReport; qty: keyof NoonReport }[] = [
+  { tankId: 'mgo', label: 'ديزل', unit: 'طن', rob: 'dieselRob', qty: 'dieselQty' },
+  { tankId: 'water', label: 'مياه عذبة', unit: 'طن', rob: 'freshWaterRob', qty: 'waterQty' },
+  { tankId: 'me', label: 'زيت الماكينة', unit: 'لتر', rob: 'meLubeRob', qty: 'meQty' },
+  { tankId: 'cyl', label: 'زيت السلندرات', unit: 'لتر', rob: 'cylLubeRob', qty: 'cylQty' },
+  { tankId: 'hyd', label: 'زيت الهيدروليك', unit: 'لتر', rob: 'hydOilRob', qty: 'hydQty' },
+];
+
+/** إجمالي الفاتورة: الكمية × السعر الأساسي + الضرايب والرسوم. */
+export function bunkerTotal(record: BunkerRecord): number {
+  if (record.totalAmount != null) return record.totalAmount;
+  const tax = record.taxAmount ?? (num(record.qty) * num(record.pricePerTon) * num(record.taxPercent)) / 100;
+  return (
+    num(record.qty) * num(record.pricePerTon) +
+    tax +
+    num(record.transportFee) +
+    num(record.fireFightingFee) +
+    num(record.bankFee) +
+    num(record.otherFee)
+  );
+}
+
+/** سعر الوحدة اللي الاستهلاك بيتسعّر بيه: إجمالي الفاتورة ÷ الكمية. */
+export function bunkerUnitPrice(record: BunkerRecord): number {
+  if (record.finalUnitPrice != null && record.finalUnitPrice > 0) return record.finalUnitPrice;
+  return num(record.qty) === 0 ? 0 : bunkerTotal(record) / num(record.qty);
+}
+
+/** سعر آخر فاتورة للخزان ده في تاريخ معين أو قبله. */
+export function unitPriceAt(data: VesselData, tankId: string, date: string): number {
+  const invoices = data.bunkers
+    .filter((record) => record.tankId === tankId && record.qty > 0 && (!date || record.date <= date))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const last = invoices[invoices.length - 1];
+  return last ? bunkerUnitPrice(last) : 0;
+}
+
+export interface FuelDayLine {
+  tankId: string;
+  label: string;
+  unit: string;
+  /** الرصيد قبل بداية اليوم = R.O.B + CONS. */
+  opening: number | null;
+  /** الرصيد المتبقي في التانك من التقرير. */
+  rob: number | null;
+  /** المستهلك في آخر 24 ساعة، موجب. */
+  consumed: number;
+  /** المستلم في نفس اليوم، موجب. */
+  received: number;
+  unitPrice: number;
+  /** تكلفة اليوم = المستهلك × سعر آخر فاتورة. */
+  cost: number;
+}
+
+/**
+ * تكلفة يوم واحد من تقرير الظهيرة. التعبئة مش مصروف: الفرق الموجب في الرصيد
+ * بيتسجل كمستلم بتكلفة صفر، والمصروف هو المستهلك × سعر آخر فاتورة.
+ */
+export function fuelDay(data: VesselData, report: NoonReport, previous: NoonReport | null): FuelDayLine[] {
+  return FUEL_ITEMS.map((item) => {
+    const rob = report[item.rob] as number | null;
+    const before = previous ? (previous[item.rob] as number | null) : null;
+    const delta = rob != null && before != null ? rob - before : null;
+    const invoiced = data.bunkers
+      .filter((record) => record.tankId === item.tankId && record.date === report.date)
+      .reduce((sum, record) => sum + num(record.qty), 0);
+    // الفرق في الرصيد = المستلم ناقص المستهلك، فالمستهلك يوم التعبئة بيطلع من الفاتورة.
+    const received = delta != null ? Math.max(invoiced, delta > 0 ? delta : 0) : invoiced;
+    const consumed =
+      delta != null ? Math.max(0, received - delta) : Math.abs(num(report[item.qty] as number));
+    const unitPrice = unitPriceAt(data, item.tankId, report.date);
+    return {
+      tankId: item.tankId,
+      label: item.label,
+      unit: item.unit,
+      opening: rob != null ? rob + consumed - received : null,
+      rob,
+      consumed,
+      received,
+      unitPrice,
+      cost: consumed * unitPrice,
+    };
+  });
+}
+
+/** تقارير الظهيرة مرتبة بالتاريخ، وكل يوم بيوم مش بيمسح اللي قبله. */
+export function noonByDate(data: VesselData, voyageId: number | null = null): NoonReport[] {
+  return data.noonReports
+    .filter((report) => voyageId == null || report.voyageId === voyageId)
+    .slice()
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export interface FuelDay {
+  report: NoonReport;
+  lines: FuelDayLine[];
+  cost: number;
+}
+
+export function fuelLedger(data: VesselData, voyageId: number | null = null): FuelDay[] {
+  const reports = noonByDate(data, voyageId);
+  return reports.map((report, index) => {
+    const lines = fuelDay(data, report, index === 0 ? null : reports[index - 1]);
+    return { report, lines, cost: lines.reduce((sum, line) => sum + line.cost, 0) };
+  });
+}
+
+export interface FuelStockLine extends FuelDayLine {
+  /** قيمة المتبقي في التانك، وهي مخزون مش مصروف. */
+  stockValue: number;
+}
+
+/** رصيد كل بند آخر يوم في الرحلة، بقيمة المتبقي كمخزون. */
+export function fuelStock(data: VesselData, voyageId: number | null = null): FuelStockLine[] {
+  const ledger = fuelLedger(data, voyageId);
+  const last = ledger[ledger.length - 1];
+  return FUEL_ITEMS.map((item) => {
+    const line = last?.lines.find((entry) => entry.tankId === item.tankId);
+    const tank = data.tanks.find((entry) => entry.id === item.tankId);
+    const rob = line?.rob ?? tank?.current ?? null;
+    const unitPrice = unitPriceAt(data, item.tankId, last?.report.date ?? today());
+    return {
+      tankId: item.tankId,
+      label: item.label,
+      unit: item.unit,
+      opening: line?.opening ?? null,
+      rob,
+      consumed: ledger.reduce((sum, day) => sum + (day.lines.find((entry) => entry.tankId === item.tankId)?.consumed ?? 0), 0),
+      received: ledger.reduce((sum, day) => sum + (day.lines.find((entry) => entry.tankId === item.tankId)?.received ?? 0), 0),
+      unitPrice,
+      cost: ledger.reduce((sum, day) => sum + (day.lines.find((entry) => entry.tankId === item.tankId)?.cost ?? 0), 0),
+      stockValue: num(rob) * unitPrice,
+    };
+  });
 }
 
 /* ───────────── مساعدات للعرض ───────────── */

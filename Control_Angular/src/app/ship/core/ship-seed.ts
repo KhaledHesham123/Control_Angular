@@ -31,6 +31,7 @@ export function emptyVesselData(): VesselData {
     bunkers: [],
     expenses: [],
     logs: [],
+    noonReports: [],
     certificates: buildCertRegister('ship'),
     clients: [],
     shipments: [],

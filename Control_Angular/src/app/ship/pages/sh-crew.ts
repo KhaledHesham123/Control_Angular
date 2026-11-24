@@ -41,10 +41,25 @@ const RELIEF_DAYS = 270;
         <div class="kpi warn"><label>في إجازة</label><strong>{{ count('OnLeave') }}</strong></div>
         <div class="kpi"><label>سابقون</label><strong>{{ count('Former') }}</strong></div>
         <div class="kpi" [class.bad]="reliefDue().length > 0"><label>يستحق تبديل (+9 شهور)</label><strong>{{ reliefDue().length }}</strong></div>
+        <div class="kpi" [class.bad]="docAlerts().length > 0"><label>مستندات تنتهي أو منتهية</label><strong>{{ docAlerts().length }}</strong></div>
         @if (s.can('costs')) {
           <div class="kpi gold"><label>رواتب الشهر (في الخدمة)</label><strong>{{ usd(payroll()) }}</strong></div>
         }
       </div>
+
+      @if (docAlerts().length) {
+        <section class="card">
+          <div class="card-head"><h2>تنبيهات المستندات</h2><span class="muted small">جواز السفر وجواز البحار وGMDSS، كل تاريخ لوحده</span></div>
+          <div class="card-body stack">
+            @for (a of docAlerts(); track a.member + a.doc) {
+              <div class="alert" [class]="'alert ' + a.tone">
+                <sc-icon name="alert" />
+                <span><b>{{ a.member }}</b> — {{ a.doc }} {{ a.number }} — {{ a.label }} ({{ dateLabel(a.expiry) }})</span>
+              </div>
+            }
+          </div>
+        </section>
+      }
 
       <div class="row between">
         <div class="tabs">
@@ -84,6 +99,10 @@ const RELIEF_DAYS = 270;
               </div>
               <dl class="kv" style="grid-template-columns: 110px 1fr">
                 <dt>جواز البحار</dt><dd class="small"><span class="ltr">{{ m.seamanBookNo || '—' }}</span></dd>
+                @if (nearestDoc(m); as doc) {
+                  <dt>{{ doc.name }}</dt>
+                  <dd><span class="badge" [class]="'badge ' + doc.state.tone">{{ doc.state.label }}</span></dd>
+                }
                 @for (tour of m.tours; track tour.signOn; let last = $last) {
                   <dt>صعود</dt><dd>{{ dateLabel(tour.signOn) }} · {{ tour.signOnPort }}</dd>
                   <dt>نزول</dt><dd>{{ offLabel(m, tour, last) }}</dd>
@@ -199,8 +218,14 @@ const RELIEF_DAYS = 270;
                 </select>
               </label>
               <label class="field"><span>الجنسية</span><input type="text" [(ngModel)]="form.nationality" /></label>
+              <label class="field"><span>تاريخ الميلاد</span><input type="date" [(ngModel)]="form.birthDate" /></label>
+              <label class="field"><span>محل الميلاد</span><input type="text" [(ngModel)]="form.birthPlace" /></label>
               <label class="field"><span>رقم جواز السفر</span><input type="text" dir="ltr" [(ngModel)]="form.passportNo" /></label>
-              <label class="field"><span>رقم جواز البحار (Seaman Book)</span><input type="text" dir="ltr" [(ngModel)]="form.seamanBookNo" /></label>
+              <label class="field"><span>تاريخ انتهاء جواز السفر</span><input type="date" [(ngModel)]="form.passportExpiry" /></label>
+              <label class="field"><span>رقم جواز البحار</span><input type="text" dir="ltr" [(ngModel)]="form.seamanBookNo" /></label>
+              <label class="field"><span>تاريخ انتهاء جواز البحار</span><input type="date" [(ngModel)]="form.seamanBookExpiry" /></label>
+              <label class="field"><span>رقم GMDSS</span><input type="text" dir="ltr" [(ngModel)]="form.gmdssNo" /></label>
+              <label class="field"><span>تاريخ انتهاء GMDSS</span><input type="date" [(ngModel)]="form.gmdssExpiry" /></label>
               <label class="field"><span>الهاتف</span><input type="text" dir="ltr" [(ngModel)]="form.phone" /></label>
               @if (s.can('costs')) {
                 <label class="field"><span>الراتب الشهري (USD)</span><input type="number" min="0" [(ngModel)]="form.salary" /></label>
@@ -257,10 +282,14 @@ const RELIEF_DAYS = 270;
             </div>
             <dl class="kv">
               <dt>الجنسية</dt><dd>{{ m.nationality || '—' }}</dd>
-              <dt>الميلاد</dt><dd>{{ dateLabel(m.birthDate) }} · {{ m.birthPlace || '—' }}</dd>
-              <dt>جواز السفر</dt><dd><span class="ltr">{{ m.passportNo || '—' }}</span> · {{ dateLabel(m.passportExpiry) }}</dd>
-              <dt>جواز البحار</dt><dd><span class="ltr">{{ m.seamanBookNo || '—' }}</span> · {{ dateLabel(m.seamanBookExpiry) }}@if (m.previousSeamanBook) { <div class="muted small">السابق {{ m.previousSeamanBook }}</div> }</dd>
-              <dt>GMDSS</dt><dd><span class="ltr">{{ m.gmdssNo || '—' }}</span> · {{ dateLabel(m.gmdssExpiry) }}</dd>
+              <dt>تاريخ الميلاد</dt><dd>{{ dateLabel(m.birthDate) }}</dd>
+              <dt>محل الميلاد</dt><dd>{{ m.birthPlace || '—' }}</dd>
+              <dt>رقم جواز السفر</dt><dd><span class="ltr">{{ m.passportNo || '—' }}</span></dd>
+              <dt>انتهاء جواز السفر</dt><dd>{{ dateLabel(m.passportExpiry) }} <span class="badge" [class]="'badge ' + cert(m.passportExpiry).tone">{{ cert(m.passportExpiry).label }}</span></dd>
+              <dt>رقم جواز البحار</dt><dd><span class="ltr">{{ m.seamanBookNo || '—' }}</span>@if (m.previousSeamanBook) { <div class="muted small">السابق {{ m.previousSeamanBook }}</div> }</dd>
+              <dt>انتهاء جواز البحار</dt><dd>{{ dateLabel(m.seamanBookExpiry) }} <span class="badge" [class]="'badge ' + cert(m.seamanBookExpiry).tone">{{ cert(m.seamanBookExpiry).label }}</span></dd>
+              <dt>رقم GMDSS</dt><dd><span class="ltr">{{ m.gmdssNo || '—' }}</span></dd>
+              <dt>انتهاء GMDSS</dt><dd>{{ dateLabel(m.gmdssExpiry) }} <span class="badge" [class]="'badge ' + cert(m.gmdssExpiry).tone">{{ cert(m.gmdssExpiry).label }}</span></dd>
               <dt>الهاتف</dt><dd><span class="ltr">{{ m.phone || '—' }}</span></dd>
               @if (m.notes) { <dt>ملاحظات</dt><dd>{{ m.notes }}</dd> }
             </dl>
@@ -270,7 +299,7 @@ const RELIEF_DAYS = 270;
                 <div class="table-wrap">
                   <table class="tbl">
                     <tbody>
-                      @for (c of m.certs; track c.id) {
+                      @for (c of ownCerts(m); track c.id) {
                         <tr>
                           <td>{{ c.name }}<div class="muted small">{{ c.number }}</div></td>
                           <td><span class="badge" [class]="'badge ' + cert(c.expiry).tone">{{ cert(c.expiry).label }}</span></td>
@@ -279,7 +308,7 @@ const RELIEF_DAYS = 270;
                       }
                     </tbody>
                   </table>
-                  @if (!m.certs.length) { <div class="empty small">لا توجد شهادات.</div> }
+                  @if (!ownCerts(m).length) { <div class="empty small">لا توجد شهادات.</div> }
                 </div>
                 @if (s.can('crew')) {
                   <div class="row">
@@ -384,6 +413,32 @@ export class ShCrew {
   readonly onLeave = computed(() => this.s.crew().filter((m) => m.status === 'OnLeave'));
   readonly reliefDue = computed(() => this.s.crew().filter((m) => m.status === 'OnBoard' && this.onboardDays(m) > RELIEF_DAYS));
   readonly payroll = computed(() => this.s.crewOnBoard().reduce((sum, m) => sum + m.salary, 0));
+  readonly docAlerts = computed(() =>
+    this.s
+      .crew()
+      .filter((m) => m.status !== 'Former')
+      .flatMap((m) =>
+        this.identity(m)
+          .map((doc) => ({ member: m.name, doc: doc.name, number: doc.number, expiry: doc.expiry, ...certState(doc.expiry) }))
+          .filter((doc) => doc.tone === 'bad' || doc.tone === 'warn'),
+      )
+      .sort((a, b) => daysBetween(today(), a.expiry || '9999-12-31') - daysBetween(today(), b.expiry || '9999-12-31')),
+  );
+
+  identity(m: CrewMember): { name: string; number: string; expiry: string }[] {
+    return [
+      { name: 'جواز السفر', number: m.passportNo, expiry: m.passportExpiry },
+      { name: 'جواز البحار', number: m.seamanBookNo, expiry: m.seamanBookExpiry },
+      { name: 'GMDSS', number: m.gmdssNo, expiry: m.gmdssExpiry },
+    ].filter((doc) => doc.number || doc.expiry);
+  }
+
+  nearestDoc(m: CrewMember): { name: string; state: ReturnType<typeof certState> } | null {
+    const docs = this.identity(m).filter((doc) => doc.expiry);
+    if (!docs.length) return null;
+    const nearest = docs.sort((a, b) => daysBetween(today(), a.expiry) - daysBetween(today(), b.expiry))[0];
+    return { name: nearest.name, state: certState(nearest.expiry) };
+  }
 
   count(st: CrewStatus): number {
     return this.s.crew().filter((m) => m.status === st).length;
@@ -437,8 +492,15 @@ export class ShCrew {
     return iso ? Math.max(0, daysBetween(iso, today())) : 0;
   }
 
+  ownCerts(m: CrewMember) {
+    const copied = ['جواز سفر', 'جواز بحار', 'جواز السفر', 'جواز البحار', 'GMDSS'];
+    return m.certs.filter((c) => !copied.includes(c.name));
+  }
+
   expiring(m: CrewMember): number {
-    return m.certs.filter((c) => ['warn', 'bad'].includes(certState(c.expiry).tone)).length;
+    const copied = ['جواز سفر', 'جواز بحار', 'جواز السفر', 'جواز البحار', 'GMDSS'];
+    const certs = m.certs.filter((c) => !copied.includes(c.name) && ['warn', 'bad'].includes(certState(c.expiry).tone)).length;
+    return certs + this.identity(m).filter((doc) => ['warn', 'bad'].includes(certState(doc.expiry).tone)).length;
   }
 
   cert(expiry: string) {

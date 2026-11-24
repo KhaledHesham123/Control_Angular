@@ -8,6 +8,7 @@ import { ShipFiles } from './ship-files';
 import {
   activeLines,
   addDays,
+  bunkerTotal,
   collapseTanks,
   groupsOf,
   num,
@@ -19,6 +20,7 @@ import {
 import { buildCertRegister } from './ship-certs';
 import { AMANY_CERTS } from './ship-certs-amany';
 import { amanyNoonReports } from './ship-amany-noon';
+import { AMANY_NOON } from './ship-noon-amany';
 import { amanyTradePorts, amanyTradeVoyages } from './ship-amany-voyages';
 import { amanyCrew } from './ship-amany-crew';
 import { amanyBunkers, amanyExpenses, amanyTanks } from './ship-amany-ops';
@@ -33,6 +35,7 @@ import {
   CrewCert,
   CrewMember,
   DailyLog,
+  NoonReport,
   DailyRate,
   Expense,
   GroupApproval,
@@ -167,6 +170,7 @@ export class ShipStore {
           expenses: amanyExpenses(),
           bunkers: amanyBunkers(),
           logs: amanyNoonReports(),
+          noonReports: AMANY_NOON,
           stock: AMANY_STOCK,
           config: amanyConfig(),
           certificates: buildCertRegister(ship.id, AMANY_CERTS),
@@ -657,7 +661,7 @@ export class ShipStore {
     });
   }
 
-  bunker(tankId: string, qty: number, price: number, supplier: string, port: string, invoice: string, date: string): string | null {
+  bunker(tankId: string, qty: number, price: number, supplier: string, port: string, invoice: string, date: string, extra: Partial<BunkerRecord> = {}): string | null {
     const tank = this.tanks().find((t) => t.id === tankId);
     const amount = num(qty);
     if (!tank) return 'اختر الخزان.';
@@ -665,7 +669,7 @@ export class ShipStore {
     const room = tank.max - tank.current;
     if (amount > room + 0.001) return `المساحة الفارغة في الخزان ${round(room, 1)} طن فقط.`;
     const balance = tank.current + amount;
-    const record: BunkerRecord = {
+    const draft: BunkerRecord = {
       id: uid('bk'),
       date,
       tankId,
@@ -674,8 +678,12 @@ export class ShipStore {
       supplier,
       port,
       invoice,
+      unit: tank.unit || 'طن',
       voyageId: this.activeVoyage()?.id ?? null,
+      ...extra,
     };
+    const totalAmount = bunkerTotal({ ...draft, totalAmount: undefined });
+    const record: BunkerRecord = { ...draft, totalAmount, finalUnitPrice: round(totalAmount / amount, 4) };
     this.patch((d) => ({
       ...d,
       tanks: d.tanks.map((t) => (t.id === tankId ? { ...t, current: round(balance, 2) } : t)),
@@ -685,7 +693,10 @@ export class ShipStore {
     this.send('put', 'Tanks', { ...tank, current: round(balance, 2) });
     this.send('post', 'Tanks/Bunker', record);
     this.send('post', 'Inventory/Movements', this.movements()[0]);
-    this.notify(`تم تزويد ${amount} طن في «${tank.name}» بتكلفة $${Math.round(amount * num(price)).toLocaleString('en-US')}.`);
+    this.notify(
+      `تم تزويد ${amount} ${tank.unit || 'طن'} في «${tank.name}» بفاتورة $${Math.round(totalAmount).toLocaleString('en-US')}. ` +
+        `سعر الوحدة ${round(record.finalUnitPrice ?? 0, 2)} وهو اللي الاستهلاك هيتسعّر بيه. التعبئة مش مصروف على الرحلة.`
+    );
     return null;
   }
 
@@ -854,6 +865,35 @@ export class ShipStore {
         return this.failed();
       }),
     );
+  }
+
+  noonReports(): Observable<NoonReport[]> {
+    const vesselCode = this.vessel().id;
+    return this.http.get<Result<NoonReport[]>>(`${SHIP_API}/Operations/Noon`, { params: new HttpParams().set('vesselCode', vesselCode) }).pipe(
+      map((result) => (result.succeeded && result.data?.length ? result.data : [])),
+      catchError(() => of([])),
+    );
+  }
+
+  applyNoonReports(rows: NoonReport[]): void {
+    this.patch((d) => ({ ...d, noonReports: rows.map((row) => ({ ...row })) }));
+  }
+
+  saveNoonReport(row: NoonReport): void {
+    const rows = this.data().noonReports ?? [];
+    const next = rows.some((item) => item.id === row.id)
+      ? rows.map((item) => (item.id === row.id ? { ...row } : item))
+      : [...rows, { ...row }];
+    next.sort((a, b) => a.date.localeCompare(b.date));
+    this.patch((d) => ({ ...d, noonReports: next }));
+    this.send('put', 'Operations/Noon', row);
+    this.notify('تم حفظ تقرير الظهيرة.');
+  }
+
+  deleteNoonReport(id: string): void {
+    this.patch((d) => ({ ...d, noonReports: (d.noonReports ?? []).filter((row) => row.id !== id) }));
+    this.send('delete', 'Operations/Noon', undefined, { code: id });
+    this.notify('تم حذف تقرير الظهيرة.');
   }
 
   /* ───────────── طلبات الشراء ───────────── */
