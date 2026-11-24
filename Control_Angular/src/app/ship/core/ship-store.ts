@@ -18,6 +18,10 @@ import {
 } from './ship-calc';
 import { buildCertRegister } from './ship-certs';
 import { AMANY_CERTS } from './ship-certs-amany';
+import { amanyNoonReports } from './ship-amany-noon';
+import { amanyTradePorts, amanyTradeVoyages } from './ship-amany-voyages';
+import { amanyCrew } from './ship-amany-crew';
+import { amanyBunkers, amanyExpenses, amanyTanks } from './ship-amany-ops';
 import { amanyConfig, amanyHolds, amanyQueen, emptyVessel, emptyVesselData, STATE_VERSION } from './ship-seed';
 import { AMANY_CATEGORIES, AMANY_PRODUCTS, AMANY_STOCK } from './ship-stores-amany';
 import {
@@ -121,7 +125,7 @@ export class ShipStore {
       case 'Admin':
         return 'إدارة الشركة';
       case 'Captain':
-        return crew.find((c) => c.rank === 'قبطان')?.name ?? 'القبطان';
+        return crew.find((c) => c.rank === 'ربان' || c.rank === 'قبطان')?.name ?? 'الربان';
       case 'ChiefEngineer':
         return crew.find((c) => c.rank === 'كبير مهندسين')?.name ?? 'كبير المهندسين';
       default:
@@ -152,10 +156,17 @@ export class ShipStore {
       vessels: [ship],
       categories: AMANY_CATEGORIES,
       products: AMANY_PRODUCTS,
+      ports: amanyTradePorts(),
       data: {
         [ship.id]: {
           ...emptyVesselData(),
           holds: amanyHolds(),
+          tanks: amanyTanks(),
+          voyages: amanyTradeVoyages(),
+          crew: amanyCrew(),
+          expenses: amanyExpenses(),
+          bunkers: amanyBunkers(),
+          logs: amanyNoonReports(),
           stock: AMANY_STOCK,
           config: amanyConfig(),
           certificates: buildCertRegister(ship.id, AMANY_CERTS),
@@ -795,6 +806,16 @@ export class ShipStore {
     );
   }
 
+  saveFixedCost(cost: { code: string; label: string; amountPerDay: number; note: string }, silent = false): void {
+    const current = this.data().config.fixedCosts ?? [];
+    const next = current.some((item) => item.code === cost.code)
+      ? current.map((item) => (item.code === cost.code ? { ...cost } : item))
+      : [...current, { ...cost }];
+    this.patch((d) => ({ ...d, config: { ...d.config, fixedCosts: next } }));
+    this.send('put', 'Operations/FixedCosts', cost);
+    if (!silent) this.notify('تم حفظ التكلفة الثابتة.');
+  }
+
   saveDailyRate(rate: DailyRate, silent = false): void {
     const rates = this.data().config.dailyRates ?? [];
     const next = rates.some((item) => item.kind === rate.kind && item.motion === rate.motion)
@@ -942,8 +963,40 @@ export class ShipStore {
   }
 
   markReady(id: string): void {
-    this.mutateRequest(id, (r) => ({ ...r, status: r.sends.length || r.offers.length ? this.derive({ ...r, status: 'sent' }) : 'ready' }), 'اعتمدت الإدارة الطلب — جاهز للإرسال للموردين', 'Requests/Ready');
+    const request = this.requests().find((item) => item.id === id);
+    if (!request?.ownerSign) {
+      this.notify('ارفع نسخة الطلب الممضاة من صاحب المركب قبل الاعتماد.', 'warn');
+      return;
+    }
+    this.mutateRequest(id, (r) => ({ ...r, status: r.sends.length || r.offers.length ? this.derive({ ...r, status: 'sent' }) : 'ready' }), 'اعتمدت الإدارة الطلب بعد رفع النسخة الممضاة — جاهز للإرسال للموردين', 'Requests/Ready');
     this.notify('الطلب جاهز للإرسال للموردين.');
+  }
+
+  async attachOwnerSign(id: string, file: File): Promise<boolean> {
+    const max = 25 * 1024 * 1024;
+    if (file.size > max) {
+      this.notify('الملف أكبر من 25 ميجا.', 'bad');
+      return false;
+    }
+    const okType = file.type === 'application/pdf' || file.type.startsWith('image/') || /\.(pdf|png|jpe?g|webp)$/i.test(file.name);
+    if (!okType) {
+      this.notify('الملف لازم يكون PDF أو صورة للنسخة الممضاة.', 'bad');
+      return false;
+    }
+    try {
+      await this.files.putLocal(`owner-sign:${id}`, file);
+    } catch {
+      this.notify('تعذّر حفظ النسخة الممضاة على الجهاز.', 'bad');
+      return false;
+    }
+    const meta = { name: file.name, size: file.size, type: file.type || 'application/pdf', uploadedAt: today() };
+    this.mutateRequest(id, (request) => ({ ...request, ownerSign: meta }), `رُفعت نسخة موقعة: ${file.name}`);
+    this.notify('تم رفع النسخة الممضاة. تقدر تعتمد الطلب.');
+    return true;
+  }
+
+  ownerSignFile(id: string): Promise<Blob | null> {
+    return this.files.getLocal(`owner-sign:${id}`).catch(() => null);
   }
 
   returnToDraft(id: string): void {

@@ -1,4 +1,4 @@
-import { Component, effect, inject, untracked } from '@angular/core';
+import { Component, computed, effect, inject, untracked } from '@angular/core';
 import { kindGauge, today } from '../core/ship-calc';
 import { dateLabel, fmt } from '../core/ship-format';
 import { DailyInput, ShipStore } from '../core/ship-store';
@@ -78,7 +78,7 @@ import { TANK_KIND_LABEL, TankKind } from '../core/ship.types';
           <table class="tbl">
             <thead><tr><th>التاريخ</th><th>الوضع</th><th>الموقع</th><th>HFO</th><th>MGO</th><th>زيوت</th><th>مياه</th><th>سجّله</th></tr></thead>
             <tbody>
-              @for (l of s.data().logs; track l.id) {
+              @for (l of history(); track l.id) {
                 <tr>
                   <td>{{ dateLabel(l.date) }}</td>
                   <td><span class="badge" [class]="'badge ' + (l.mode === 'sea' ? 'info' : 'muted')">{{ l.mode === 'sea' ? 'إبحار' : 'ميناء' }}</span></td>
@@ -105,6 +105,7 @@ export class ShDaily {
   readonly fmt = fmt;
   readonly dateLabel = dateLabel;
   readonly todayIso = today();
+  readonly history = computed(() => [...this.s.data().logs].sort((a, b) => b.date.localeCompare(a.date)));
 
   form: DailyInput = this.fresh('sea');
 

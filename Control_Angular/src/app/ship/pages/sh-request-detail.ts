@@ -17,7 +17,7 @@ import {
   uid,
 } from '../core/ship-calc';
 import { dateLabel, fmt, usd } from '../core/ship-format';
-import { mailtoFor, rfqPrint } from '../core/ship-print';
+import { mailtoFor, ownerSignPrint, rfqPrint } from '../core/ship-print';
 import { ShipStore } from '../core/ship-store';
 import { Offer, REQ_STATUS, ReqLine, Requisition, Supplier } from '../core/ship.types';
 
@@ -67,7 +67,8 @@ interface ReceiveRow {
               <button type="button" class="btn btn-primary" (click)="s.submitRequest(r.id)"><sc-icon name="send" /> إرسال للإدارة</button>
             }
             @if (r.status === 'submitted' && s.can('review')) {
-              <button type="button" class="btn btn-primary" [disabled]="!liveLines().length" (click)="s.markReady(r.id)"><sc-icon name="check" /> اعتماد وجاهز للإرسال</button>
+              <button type="button" class="btn" [disabled]="!liveLines().length" (click)="printOwner()"><sc-icon name="print" /> طباعة للتوقيع</button>
+              <button type="button" class="btn btn-primary" [disabled]="!liveLines().length || !r.ownerSign" (click)="s.markReady(r.id)"><sc-icon name="check" /> اعتماد وجاهز للإرسال</button>
             }
             @if (r.status === 'ready' && s.can('review')) {
               <button type="button" class="btn" (click)="s.returnToDraft(r.id)">إرجاع للمراجعة</button>
@@ -97,6 +98,26 @@ interface ReceiveRow {
         }
         @if (r.status === 'submitted' && !s.can('review')) {
           <div class="alert"><sc-icon name="info" /> الطلب عند الإدارة للمراجعة. هتظهر هنا حالته وموعد التوريد بعد الموافقة.</div>
+        }
+        @if (r.status === 'submitted' && s.can('review')) {
+          <section class="card">
+            <div class="card-head"><h2>توقيع صاحب المركب</h2></div>
+            <div class="card-body stack">
+              <p class="muted small">اطبع الطلب، صاحب المركب يمضيه، وبعدين ارفع النسخة الممضاة. الاعتماد مش هيتم من غيرها.</p>
+              <div class="row">
+                <button type="button" class="btn" [disabled]="!liveLines().length" (click)="printOwner()"><sc-icon name="print" /> طباعة PDF</button>
+                <label class="btn btn-primary">
+                  رفع النسخة الممضاة
+                  <input type="file" accept="application/pdf,image/*" hidden (change)="onSign($event)" />
+                </label>
+              </div>
+              @if (r.ownerSign; as file) {
+                <div class="alert ok"><sc-icon name="check" /> {{ file.name }} · رُفعت {{ dateLabel(file.uploadedAt) }} <button type="button" class="btn btn-sm" (click)="openSign()">عرض</button></div>
+              }
+            </div>
+          </section>
+        } @else if (r.ownerSign; as file) {
+          <div class="alert ok"><sc-icon name="check" /> النسخة الممضاة: {{ file.name }} <button type="button" class="btn btn-sm" (click)="openSign()">عرض</button></div>
         }
 
         <section class="card">
@@ -503,7 +524,8 @@ export class ShRequestDetail {
     const order = REQ_STATUS[r.status].order;
     const list = [
       { label: 'تقديم الطلب', done: order >= 1 },
-      { label: 'مراجعة الإدارة', done: order >= 2 },
+      { label: 'توقيع صاحب المركب', done: !!r.ownerSign },
+      { label: 'اعتماد الإدارة', done: order >= 2 },
       { label: 'إرسال للموردين', done: r.sends.length > 0 || order >= 3 },
       { label: 'وصول العروض', done: r.offers.length > 0 || order >= 4 },
       { label: 'اعتماد العرض', done: order >= 5 },
@@ -630,6 +652,32 @@ export class ShRequestDetail {
   pdf(g: string): void {
     const r = this.req();
     if (r) rfqPrint(this.s.vessel(), r, g, this.catName(g));
+  }
+
+  printOwner(): void {
+    const r = this.req();
+    if (r) ownerSignPrint(this.s.vessel(), r, (id) => this.catName(id));
+  }
+
+  onSign(event: Event): void {
+    const r = this.req();
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (r && file) void this.s.attachOwnerSign(r.id, file);
+  }
+
+  async openSign(): Promise<void> {
+    const r = this.req();
+    if (!r) return;
+    const blob = await this.s.ownerSignFile(r.id);
+    if (!blob) {
+      this.s.notify('النسخة الممضاة مش موجودة على الجهاز ده.', 'warn');
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
 
   doAdd(): void {

@@ -85,6 +85,16 @@ export interface Tank {
   kind: TankKind;
   current: number;
   max: number;
+  unit?: string;
+  /** رصيد استلام المركب. */
+  bob?: number;
+  /** رصيد بداية الرحلة. */
+  opening?: number;
+  added?: number;
+  consumed?: number;
+  /** أعلى رصيد اتسجل، ومش سعة الخزان. */
+  peak?: number;
+  note?: string;
 }
 
 export interface Hold {
@@ -101,13 +111,26 @@ export interface Generator {
   defaultHours: number;
 }
 
-export type DailyKind = 'Water' | 'Gasoline' | 'Diesel' | 'Lubricant';
+export type DailyKind = 'Water' | 'Gasoline' | 'Diesel' | 'Lubricant' | 'CylinderOil' | 'EngineOil' | 'HydraulicOil';
 export type DailyMotion = 'Sailing' | 'Stopped';
 
 export interface DailyRate {
   kind: DailyKind;
   motion: DailyMotion;
+  /** طن/يوم للديزل والمياه، ولتر/يوم للزيوت. */
   tonsPerDay: number;
+  unit?: string;
+  unitPrice?: number;
+  /** تكلفة اليوم بالدولار إن كانت مختلفة عن الكمية × السعر. */
+  dailyCost?: number;
+  note?: string;
+}
+
+export interface FixedCost {
+  code: string;
+  label: string;
+  amountPerDay: number;
+  note: string;
 }
 
 export interface StatusLogEntry {
@@ -129,6 +152,7 @@ export interface ShipConfig {
   waterLitersPerPersonDay: number;
   generators: Generator[];
   dailyRates?: DailyRate[];
+  fixedCosts?: FixedCost[];
 }
 
 /* ───────────── الكتالوج ───────────── */
@@ -316,6 +340,8 @@ export interface Requisition {
   offers: Offer[];
   approvals: GroupApproval[];
   events: ReqEvent[];
+  /** نسخة الطلب بعد توقيع صاحب المركب. */
+  ownerSign?: CertFile | null;
 }
 
 /* ───────────── الطاقم ───────────── */
@@ -336,27 +362,80 @@ export const CREW_STATUS_LABEL: Record<CrewStatus, string> = {
 };
 
 export const CREW_RANKS: { rank: string; dept: CrewDept }[] = [
+  { rank: 'ربان', dept: 'deck' },
   { rank: 'قبطان', dept: 'deck' },
   { rank: 'ضابط أول', dept: 'deck' },
   { rank: 'ضابط ثانٍ', dept: 'deck' },
   { rank: 'ضابط ثالث', dept: 'deck' },
   { rank: 'ريس بحري', dept: 'deck' },
   { rank: 'بحار ماهر (AB)', dept: 'deck' },
+  { rank: 'بحار ماهر 1', dept: 'deck' },
+  { rank: 'بحار ماهر 2', dept: 'deck' },
+  { rank: 'بحار ماهر 3', dept: 'deck' },
   { rank: 'بحار عادي (OS)', dept: 'deck' },
+  { rank: 'بحار عادي 1', dept: 'deck' },
+  { rank: 'بحار عادي 2', dept: 'deck' },
   { rank: 'كبير مهندسين', dept: 'engine' },
   { rank: 'مهندس ثانٍ', dept: 'engine' },
   { rank: 'مهندس ثالث', dept: 'engine' },
   { rank: 'مهندس كهرباء', dept: 'engine' },
   { rank: 'مزيّت (Oiler)', dept: 'engine' },
+  { rank: 'مزيّت 1', dept: 'engine' },
+  { rank: 'مزيّت 2', dept: 'engine' },
+  { rank: 'طباخ', dept: 'catering' },
   { rank: 'طباخ رئيسي', dept: 'catering' },
   { rank: 'مضيف', dept: 'catering' },
 ];
+
+export type CrewDocKind =
+  | 'Passport'
+  | 'SeamanBook'
+  | 'Competency'
+  | 'Endorsement'
+  | 'Gmdss'
+  | 'Medical'
+  | 'Courses'
+  | 'Vaccination'
+  | 'Contract'
+  | 'Watchkeeping'
+  | 'Security'
+  | 'Photo'
+  | 'Signature'
+  | 'Cv'
+  | 'IdCard'
+  | 'Other';
+
+export const CREW_DOC_LABEL: Record<CrewDocKind, string> = {
+  Passport: 'جواز السفر',
+  SeamanBook: 'جواز البحار',
+  Competency: 'شهادة الأهلية',
+  Endorsement: 'شهادة المصادقة',
+  Gmdss: 'شهادة اللاسلكي',
+  Medical: 'الكشف الطبي',
+  Courses: 'الدورات',
+  Vaccination: 'التطعيم',
+  Contract: 'العقد',
+  Watchkeeping: 'شهادة المناوبة',
+  Security: 'شهادة أمن السفينة',
+  Photo: 'الصورة',
+  Signature: 'التوقيع',
+  Cv: 'السيرة الذاتية',
+  IdCard: 'البطاقة',
+  Other: 'مستند آخر',
+};
 
 export interface CrewCert {
   id: string;
   name: string;
   number: string;
   expiry: string;
+}
+
+export interface CrewDocument {
+  id: string;
+  kind: CrewDocKind;
+  name: string;
+  path: string;
 }
 
 export interface CrewEvent {
@@ -366,19 +445,40 @@ export interface CrewEvent {
   note: string;
 }
 
+/** نوبة على السفينة. التواريخ ISO وتتخزن DateTime في قاعدة البيانات. */
+export interface CrewTour {
+  signOn: string;
+  signOnPort: string;
+  signOff: string | null;
+  signOffPort: string;
+  rank: string;
+  /** سبب النزول أو التبديل فقط، من غير تكرار التواريخ. */
+  note: string;
+}
+
 export interface CrewMember {
   id: string;
   name: string;
+  nameEn: string;
   rank: string;
   dept: CrewDept;
   nationality: string;
+  birthDate: string;
+  birthPlace: string;
   passportNo: string;
+  passportExpiry: string;
   seamanBookNo: string;
+  seamanBookExpiry: string;
+  previousSeamanBook: string;
+  gmdssNo: string;
+  gmdssExpiry: string;
   phone: string;
   salary: number;
   photo: string | null;
   status: CrewStatus;
   certs: CrewCert[];
+  documents?: CrewDocument[];
+  tours: CrewTour[];
   events: CrewEvent[];
   notes: string;
 }
@@ -426,6 +526,32 @@ export const CONSUMPTION_KINDS: { id: ConsumptionKind; label: string; tank: Tank
   { id: 'Gasoline', label: 'بنزين', tank: 'hfo' },
 ];
 
+export interface VoyageMove {
+  type: string;
+  place: string;
+  start: string;
+  end: string;
+  days: string;
+  qty: number | null;
+  shortage?: number | null;
+}
+
+/** بيانات شيت الرحلات: الشحنة والوكيل ومدة الإبحار والتشغيل. */
+export interface VoyageSheet {
+  cargoType: string;
+  destination: string;
+  agent: string;
+  daAmount: number | null;
+  daContact: string;
+  exporter: string;
+  sailingTime: string;
+  anchorTime: string;
+  loads: VoyageMove[];
+  discharges: VoyageMove[];
+  totalTime: string;
+  operation: string;
+}
+
 export interface Voyage {
   id: number;
   number: string;
@@ -441,6 +567,7 @@ export interface Voyage {
   expectedLube: number;
   expectedWater?: number;
   consumptions?: VoyageConsumption[];
+  sheet?: VoyageSheet;
 }
 
 export interface BunkerRecord {
@@ -452,8 +579,12 @@ export interface BunkerRecord {
   supplier: string;
   port: string;
   invoice: string;
+  /** استهلاك نفس يوم التموين، لو دخل في رقم المستهلك. */
+  sameDayUse?: number;
   voyageId: number | null;
 }
+
+export type ExpenseCategory = 'fuel' | 'port' | 'crew' | 'other';
 
 export interface Expense {
   id: string;
@@ -462,6 +593,7 @@ export interface Expense {
   label: string;
   amount: number;
   note: string;
+  category?: ExpenseCategory;
 }
 
 export interface DailyLog {
@@ -471,11 +603,20 @@ export interface DailyLog {
   mode: 'sea' | 'port';
   by: string;
   hfo: number;
+  /** استهلاك الديزل الفعلي بالطن. */
   mgo: number;
   lube: number;
   water: number;
   hours: { mainEngine: number; boiler: number; gens: number[] };
   voyageId: number | null;
+  speedKn?: number | null;
+  distanceNm?: number | null;
+  dieselRob?: number;
+  fwRob?: number;
+  cylLiters?: number;
+  /** الرقم المسجّل في عمود الشيت، حتى لو معادلة اليوم غلط. */
+  sheetMgo?: number;
+  note?: string;
 }
 
 /** أقسام نموذج "Vessel's Certificate Status" (DE-01). */

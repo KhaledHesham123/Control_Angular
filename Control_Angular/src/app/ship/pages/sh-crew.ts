@@ -1,8 +1,9 @@
 import { ChangeDetectorRef, Component, computed, inject, signal } from '@angular/core';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { certState, crewVoyageCount, daysBetween, num, onboardIntervals, overlapDays, today, uid } from '../core/ship-calc';
 import { dateLabel, fmt, usd } from '../core/ship-format';
 import { ShipStore } from '../core/ship-store';
-import { CREW_DEPT_LABEL, CREW_RANKS, CREW_STATUS_LABEL, CrewDept, CrewMember, CrewStatus } from '../core/ship.types';
+import { CREW_DEPT_LABEL, CREW_DOC_LABEL, CREW_RANKS, CREW_STATUS_LABEL, CrewDept, CrewDocument, CrewMember, CrewStatus, CrewTour } from '../core/ship.types';
 
 type Tab = CrewStatus | 'all' | 'schedule';
 type Action = 'leave' | 'return' | 'sign-off' | 'sign-on';
@@ -76,12 +77,17 @@ const RELIEF_DAYS = 270;
                 </span>
                 <div style="min-width:0">
                   <b>{{ m.name }}</b>
+                  @if (m.nameEn) { <div class="muted small ltr">{{ m.nameEn }}</div> }
                   <div class="muted small">{{ m.rank }} · {{ deptLabel(m.dept) }}</div>
                 </div>
                 <span class="badge" [class]="'badge ' + statusTone(m.status)" style="margin-inline-start:auto">{{ statusLabel(m.status) }}</span>
               </div>
               <dl class="kv" style="grid-template-columns: 110px 1fr">
                 <dt>جواز البحار</dt><dd class="small"><span class="ltr">{{ m.seamanBookNo || '—' }}</span></dd>
+                @for (tour of m.tours; track tour.signOn; let last = $last) {
+                  <dt>صعود</dt><dd>{{ dateLabel(tour.signOn) }} · {{ tour.signOnPort }}</dd>
+                  <dt>نزول</dt><dd>{{ offLabel(m, tour, last) }}</dd>
+                }
                 <dt>الهاتف</dt><dd class="small"><span class="ltr">{{ m.phone || '—' }}</span></dd>
                 <dt>الرحلات</dt><dd>{{ voyages(m) }} رحلة</dd>
                 @if (m.status === 'OnBoard') {
@@ -237,6 +243,7 @@ const RELIEF_DAYS = 270;
               <span class="avatar lg">@if (m.photo) { <img [src]="m.photo" alt="" /> } @else { {{ initials(m.name) }} }</span>
               <div>
                 <h3>{{ m.name }}</h3>
+                @if (m.nameEn) { <div class="muted small ltr">{{ m.nameEn }}</div> }
                 <div class="muted">{{ m.rank }} · {{ deptLabel(m.dept) }} · <span class="badge" [class]="'badge ' + statusTone(m.status)">{{ statusLabel(m.status) }}</span></div>
               </div>
             </div>
@@ -250,8 +257,10 @@ const RELIEF_DAYS = 270;
             </div>
             <dl class="kv">
               <dt>الجنسية</dt><dd>{{ m.nationality || '—' }}</dd>
-              <dt>جواز السفر</dt><dd><span class="ltr">{{ m.passportNo || '—' }}</span></dd>
-              <dt>جواز البحار</dt><dd><span class="ltr">{{ m.seamanBookNo || '—' }}</span></dd>
+              <dt>الميلاد</dt><dd>{{ dateLabel(m.birthDate) }} · {{ m.birthPlace || '—' }}</dd>
+              <dt>جواز السفر</dt><dd><span class="ltr">{{ m.passportNo || '—' }}</span> · {{ dateLabel(m.passportExpiry) }}</dd>
+              <dt>جواز البحار</dt><dd><span class="ltr">{{ m.seamanBookNo || '—' }}</span> · {{ dateLabel(m.seamanBookExpiry) }}@if (m.previousSeamanBook) { <div class="muted small">السابق {{ m.previousSeamanBook }}</div> }</dd>
+              <dt>GMDSS</dt><dd><span class="ltr">{{ m.gmdssNo || '—' }}</span> · {{ dateLabel(m.gmdssExpiry) }}</dd>
               <dt>الهاتف</dt><dd><span class="ltr">{{ m.phone || '—' }}</span></dd>
               @if (m.notes) { <dt>ملاحظات</dt><dd>{{ m.notes }}</dd> }
             </dl>
@@ -282,10 +291,34 @@ const RELIEF_DAYS = 270;
                 }
               </div>
               <div class="stack">
+                <h4>المستندات</h4>
+                @if (m.documents?.length) {
+                  <div class="table-wrap">
+                    <table class="tbl">
+                      <tbody>
+                        @for (doc of m.documents; track doc.id) {
+                          <tr>
+                            <td>{{ docLabel(doc.kind) }}<div class="muted small">{{ doc.name }}</div></td>
+                            <td class="end"><button type="button" class="btn btn-sm" (click)="openDoc(doc)">عرض</button></td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                } @else {
+                  <div class="empty small">لا توجد مستندات مربوطة.</div>
+                }
                 <h4>تاريخ الصعود والنزول</h4>
                 <ul class="timeline">
-                  @for (e of history(m); track e.id) {
-                    <li><b>{{ eventLabel(e.type) }}</b> — {{ dateLabel(e.date) }}<small>{{ e.note }}</small></li>
+                  @for (tour of m.tours; track tour.signOn; let last = $last) {
+                    <li>
+                      <b>صعود</b> — {{ dateLabel(tour.signOn) }} · {{ tour.signOnPort }}
+                      @if (tour.rank) { <small>{{ tour.rank }}</small> }
+                    </li>
+                    <li>
+                      <b>نزول</b> — {{ offLabel(m, tour, last) }}
+                      @if (tour.signOff && tour.note) { <small>{{ tour.note }}</small> }
+                    </li>
                   }
                 </ul>
               </div>
@@ -294,10 +327,31 @@ const RELIEF_DAYS = 270;
         </div>
       </div>
     }
+
+    @if (preview) {
+      <div class="modal-back" (click)="preview = null" style="z-index:80">
+        <div class="modal wide" (click)="$event.stopPropagation()" style="width:min(980px, 96vw); height:min(860px, 92vh); display:flex; flex-direction:column">
+          <div class="modal-head">
+            <h3>{{ preview.name }}</h3>
+            <button type="button" class="btn btn-sm btn-ghost" (click)="preview = null"><sc-icon name="x" /></button>
+          </div>
+          <div class="modal-body" style="flex:1; min-height:0">
+            @if (preview.kind === 'image') {
+              <img [src]="preview.url" [alt]="preview.name" style="max-width:100%; max-height:100%; object-fit:contain" />
+            } @else if (preview.kind === 'pdf') {
+              <iframe [src]="preview.url" title="عرض المستند" style="width:100%; height:100%; min-height:68vh; border:0"></iframe>
+            } @else {
+              <div class="empty">الملف ده مش بيتفتح جوه الصفحة. هو محفوظ في المجلد المحلي.</div>
+            }
+          </div>
+        </div>
+      </div>
+    }
   `,
 })
 export class ShCrew {
   readonly s = inject(ShipStore);
+  private readonly sanitizer = inject(DomSanitizer);
   private readonly cdr = inject(ChangeDetectorRef);
   readonly usd = usd;
   readonly dateLabel = dateLabel;
@@ -373,6 +427,12 @@ export class ShCrew {
     return [...m.events].reverse().find((e) => e.type === type)?.date ?? '';
   }
 
+  offLabel(m: CrewMember, tour: CrewTour, last: boolean): string {
+    if (tour.signOff) return `${dateLabel(tour.signOff)} · ${tour.signOffPort}`;
+    if (last && m.status === 'OnBoard') return 'على السفينة';
+    return tour.note || '—';
+  }
+
   daysSince(iso: string): number {
     return iso ? Math.max(0, daysBetween(iso, today())) : 0;
   }
@@ -393,6 +453,19 @@ export class ShCrew {
     return t === 'sign-on' ? 'صعود' : t === 'sign-off' ? 'نزول' : t === 'leave' ? 'بدء إجازة' : 'عودة';
   }
 
+  docLabel(kind: string): string {
+    return CREW_DOC_LABEL[kind as keyof typeof CREW_DOC_LABEL] ?? kind;
+  }
+
+  preview: { name: string; kind: 'pdf' | 'image' | 'other'; url: SafeResourceUrl } | null = null;
+
+  openDoc(doc: CrewDocument): void {
+    const ext = doc.name.split('.').pop()?.toLowerCase() ?? '';
+    const kind = ext === 'pdf' ? 'pdf' : ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext) ? 'image' : 'other';
+    const url = this.sanitizer.bypassSecurityTrustResourceUrl('http://127.0.0.1:4791/file?path=' + encodeURIComponent(doc.path));
+    this.preview = { name: doc.name, kind, url };
+  }
+
   actionTitle(): string {
     return this.action ? ACTION_TITLE[this.action.type] : '';
   }
@@ -404,16 +477,25 @@ export class ShCrew {
       : {
           id: uid('crew'),
           name: '',
+          nameEn: '',
           rank: '',
           dept: 'deck',
           nationality: 'مصري',
+          birthDate: '',
+          birthPlace: '',
           passportNo: '',
+          passportExpiry: '',
           seamanBookNo: '',
+          seamanBookExpiry: '',
+          previousSeamanBook: '',
+          gmdssNo: '',
+          gmdssExpiry: '',
           phone: '',
           salary: 0,
           photo: null,
           status: 'OnBoard',
           certs: [],
+          tours: [],
           events: [],
           notes: '',
           signOnDate: today(),

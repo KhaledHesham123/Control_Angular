@@ -14,7 +14,7 @@ import {
 import { certDocStatus } from '../core/ship-certs';
 import { dateLabel, fmt, usd } from '../core/ship-format';
 import { ShipStore } from '../core/ship-store';
-import { REQ_STATUS, TANK_KIND_LABEL, TankKind } from '../core/ship.types';
+import { REQ_STATUS, TANK_KIND_LABEL, TankKind, VOYAGE_STATUS_LABEL, Voyage, VoyageStatus } from '../core/ship.types';
 
 const KINDS: { kind: TankKind; icon: string; unit: string }[] = [
   { kind: 'hfo', icon: 'fuel', unit: 'طن' },
@@ -111,6 +111,21 @@ const POWER_LABEL: Record<string, string> = {
           </div>
           <div class="card-body stack">
             @for (k of kinds(); track k.kind) {
+              @if (k.kind === 'lube' && oils().length) {
+                @for (t of oils(); track t.id) {
+                  <div class="tank-card">
+                    <div class="between row">
+                      <span class="row"><sc-icon name="wrench" /> <b>{{ t.name }}</b></span>
+                      <span class="badge" [class]="'badge ' + tankGauge(t.current, t.max).tone">{{ fmt(tankGauge(t.current, t.max).percent, 0) }}%</span>
+                    </div>
+                    <div class="between row">
+                      <span class="value"><span class="num">{{ fmt(t.current, 0) }}</span> <small class="muted">/ {{ fmt(t.max, 0) }} لتر</small></span>
+                      <span class="muted small">بداية الرحلة {{ fmt(t.opening ?? 0, 0) }}</span>
+                    </div>
+                    <div class="gauge" [class]="'gauge ' + tankGauge(t.current, t.max).tone"><i [style.width.%]="tankGauge(t.current, t.max).percent"></i></div>
+                  </div>
+                }
+              } @else {
               <div class="tank-card">
                 <div class="between row">
                   <span class="row"><sc-icon [name]="k.icon" /> <b>{{ k.label }}</b></span>
@@ -137,6 +152,7 @@ const POWER_LABEL: Record<string, string> = {
                   <div class="alert bad">الكمية الحالية لا تغطي باقي الرحلة حسب معدل الاستهلاك المتوقع.</div>
                 }
               </div>
+              }
             }
           </div>
         </section>
@@ -188,7 +204,18 @@ const POWER_LABEL: Record<string, string> = {
             @if (s.activeVoyage(); as v) {
               <div class="between row">
                 <div><b>{{ v.title }}</b><div class="muted small">{{ v.number }} · بدأت {{ dateLabel(v.startDate) }}</div></div>
-                <span class="badge ok">جارية</span>
+                @if (s.can('voyages')) {
+                  <label class="field" style="min-width: 160px; margin: 0">
+                    <span>حالة الرحلة</span>
+                    <select [ngModel]="v.status" (ngModelChange)="changeStatus(v, $event)">
+                      @for (st of voyageStatuses; track st.id) {
+                        <option [value]="st.id">{{ st.label }}</option>
+                      }
+                    </select>
+                  </label>
+                } @else {
+                  <span class="badge ok">جارية</span>
+                }
               </div>
               <div class="chips">
                 @for (st of v.stops; track st.id; let i = $index) {
@@ -270,12 +297,18 @@ const POWER_LABEL: Record<string, string> = {
 })
 export class ShDashboard {
   readonly s = inject(ShipStore);
+  readonly voyageStatuses = (Object.keys(VOYAGE_STATUS_LABEL) as VoyageStatus[]).map((id) => ({ id, label: VOYAGE_STATUS_LABEL[id] }));
   readonly isInbound = (r: { status: string }): boolean => r.status === 'approved';
   readonly usd = usd;
   readonly fmt = fmt;
   readonly dateLabel = dateLabel;
   private readonly mapEl = viewChild<ElementRef<HTMLElement>>('mapEl');
   private map: ShipMap | null = null;
+
+  changeStatus(v: Voyage, status: VoyageStatus): void {
+    if (v.status === status) return;
+    this.s.setVoyageStatus(v.id, status);
+  }
 
   readonly onLeave = computed(() => this.s.crew().filter((c) => c.status === 'OnLeave').length);
   readonly activeProducts = computed(() => this.s.products().filter((p) => p.active).length);
@@ -287,6 +320,9 @@ export class ShDashboard {
     return this.s.products().filter((p) => p.active && p.minLevel > 0 && (stock[p.id] ?? 0) < p.minLevel);
   });
 
+  readonly oils = computed(() => this.s.tanks().filter((tank) => tank.unit === 'لتر'));
+  readonly tankGauge = gaugeOf;
+
   readonly kinds = computed(() => {
     const tanks = this.s.tanks();
     const crew = this.s.crewOnBoard().length;
@@ -296,7 +332,7 @@ export class ShDashboard {
       const g = kindGauge(tanks, k.kind);
       const outlook = voyageFuelOutlook(k.kind, g.current, voyage, config, crew);
       return { ...k, label: TANK_KIND_LABEL[k.kind], g, outlook };
-    });
+    }).filter((k) => k.g.max > 0 || (k.kind === 'lube' && this.oils().length > 0));
   });
 
   readonly food = computed(() => {
@@ -329,7 +365,7 @@ export class ShDashboard {
     const out: { text: string; tone: string; icon: string }[] = [];
     for (const k of this.kinds()) {
       if (k.outlook.coversVoyage === false) out.push({ text: `${k.label}: الكمية لا تغطي باقي الرحلة`, tone: 'bad', icon: 'alert' });
-      else if (k.g.tone === 'bad') out.push({ text: `${k.label}: المتبقي ${fmt(k.g.current, 1)} طن فقط`, tone: 'bad', icon: 'alert' });
+      else if (k.g.tone === 'bad' && k.g.max > 0) out.push({ text: `${k.label}: المتبقي ${fmt(k.g.current, 1)} طن فقط`, tone: 'bad', icon: 'alert' });
       else if (k.outlook.lasts !== null && k.outlook.lasts < 8) out.push({ text: `${k.label} يكفي ${fmt(k.outlook.lasts, 0)} أيام تقريباً`, tone: 'warn', icon: 'alert' });
     }
     if (this.low().length) out.push({ text: `${this.low().length} صنف تحت الحد الأدنى — جهّز طلب شراء`, tone: 'warn', icon: 'cart' });

@@ -42,6 +42,32 @@ export function openPrint(title: string, body: string): void {
   window.setTimeout(() => win.print(), 350);
 }
 
+/** نموذج الطلب لطباعته وتوقيع صاحب المركب قبل اعتماد الإدارة. */
+export function ownerSignPrint(vessel: VesselProfile, req: Requisition, groupName: (id: string) => string): void {
+  const lines = req.lines.filter((line) => !line.removed);
+  const rows = lines
+    .map(
+      (line, index) =>
+        `<tr><td>${index + 1}</td><td>${esc(line.name)}</td><td>${esc(groupName(line.groupId))}</td><td>${esc(line.description) || '—'}</td><td>${esc(line.unit)}</td><td><b>${line.qty}</b></td></tr>`,
+    )
+    .join('');
+  openPrint(
+    `توقيع صاحب المركب — ${req.no}`,
+    `<header class="doc"><div><h1>طلب شراء للاعتماد</h1><p>يُطبع ويُوقَّع من صاحب المركب قبل اعتماد الإدارة</p></div><div style="text-align:left"><span class="tag">${esc(req.no)}</span><p>تاريخ الطلب: ${esc(req.createdAt)}</p></div></header>
+     <div class="meta">
+       <div><b>السفينة</b>${esc(vessel.name)}</div>
+       <div><b>IMO</b>${esc(vessel.imo)}</div>
+       <div><b>مقدّم الطلب</b>${esc(req.createdBy)}</div>
+       <div><b>الأولوية</b>${req.priority === 'urgent' ? 'عاجل' : 'عادي'}</div>
+       <div><b>عدد البنود</b>${lines.length}</div>
+       <div><b>تاريخ الطباعة</b>${esc(today())}</div>
+     </div>
+     <table><thead><tr><th>#</th><th>الصنف</th><th>القسم</th><th>الوصف</th><th>الوحدة</th><th>الكمية</th></tr></thead><tbody>${rows}</tbody></table>
+     ${req.notes ? `<div class="note"><b>ملاحظات الطلب:</b> ${esc(req.notes)}</div>` : ''}
+     <div class="sign"><div>توقيع صاحب المركب</div><div>التاريخ</div><div>ختم السفينة</div></div>`,
+  );
+}
+
 /** ملف طلب عرض سعر (RFQ) لقسم واحد. */
 export function rfqPrint(vessel: VesselProfile, req: Requisition, groupId: string, groupName: string, withPrices = true): void {
   const lines = activeLines(req, groupId);
@@ -97,7 +123,9 @@ export function particularsPrint(v: VesselProfile, certs: Certificate[], holds: 
       ${row('سعة الحبوب / البالة', `${v.grainCapacity ?? '—'} / ${v.baleCapacity ?? '—'} م³`)}${row('المحرك الرئيسي', v.mainEngine)}${row('الأوناش', v.cranes)}
       ${row('السرعة', `${v.speedKn} عقدة`)}
      </tbody></table>
-     ${holds.length ? `<h2>سعة العنابر</h2><table><thead><tr><th>العنبر</th><th>السعة (طن)</th><th>المحمّل (طن)</th><th>المتاح (طن)</th></tr></thead><tbody>${holds.map((h) => `<tr><td>${esc(h.name)}</td><td>${esc(h.capacity)}</td><td>${esc(h.loaded)}</td><td>${esc(h.capacity - h.loaded)}</td></tr>`).join('')}</tbody></table>` : ''}
+     ${holds.length ? holds.some((h) => h.name.includes('Fore Peak'))
+       ? `<h2>سعة الخزانات</h2><table><thead><tr><th>الخزان</th><th>السعة (م³)</th></tr></thead><tbody>${holds.map((h) => `<tr><td>${esc(h.name)}</td><td>${esc(h.capacity)}</td></tr>`).join('')}<tr><td><b>الإجمالي</b></td><td><b>${esc(Math.round(holds.reduce((sum, h) => sum + h.capacity, 0) * 100) / 100)}</b></td></tr></tbody></table>`
+       : `<h2>سعة العنابر</h2><table><thead><tr><th>العنبر</th><th>السعة (طن)</th><th>المحمّل (طن)</th><th>المتاح (طن)</th></tr></thead><tbody>${holds.map((h) => `<tr><td>${esc(h.name)}</td><td>${esc(h.capacity)}</td><td>${esc(h.loaded)}</td><td>${esc(h.capacity - h.loaded)}</td></tr>`).join('')}</tbody></table>` : ''}
      ${certRows ? `<h2>الشهادات</h2><table><thead><tr><th>الشهادة</th><th>الجهة</th><th>الإصدار</th><th>الانتهاء / الاستحقاق</th></tr></thead><tbody>${certRows}</tbody></table>` : ''}
      ${v.notes ? `<div class="note">${esc(v.notes)}</div>` : ''}`,
   );

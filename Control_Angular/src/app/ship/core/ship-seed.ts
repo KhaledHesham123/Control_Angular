@@ -1,3 +1,4 @@
+import { amanyDailyRates, amanyFixedCosts } from './ship-amany-ops';
 import { buildCertRegister } from './ship-certs';
 import { Hold, ShipConfig, VesselData, VesselProfile } from './ship.types';
 
@@ -66,23 +67,40 @@ export function amanyQueen(): VesselProfile {
     lat: 0,
     lng: 0,
     notes:
-      'المدير: NELLY SHIPPING COMPANY، 51 شارع رأس البر، دمياط، IMO 6403821. المالك: تسجيل C-120292، 80 Broad Street، Monrovia، ليبيريا، IMO 5940907. ميناء التسجيل فريتاون. الرقم الرسمي SLR10843، التسجيل VHQ-200-22-1944، MMSI 667002053، رقم التصنيف G30460. البناء J.J. Sietas رقم 860. الطول بين القائمين 90.36 م، والعمق للسطح العلوي 8.50 م. الغاطس شتاء 6.674 م، والحمولة الساكنة شتاء 5476 طن. الإزاحة 7780.5 / 7579.8 طن، الفري بورد الصيفي 1684 مم، الغاطس الهوائي 36.50 م، الوزن الخفيف 2103.80 طن. محركان مساعدان KHD AB 6M816 LLK-U، 257 ك.و / 350 حصان، 1500 لفة، MDO. مولدات PILLER ومولد عمود 300 ك.ف.أ. دافع مقدمة PLEUGER WM110-300. رفاص BERG 900H4 قطر 3800 مم. العنبر 52 × 12.6 × 8.275 م، فتحتان 25.15 × 12.57 م. تحميل الغطاء 1.65 طن/م² والقاع 10 طن/م². الاستهلاك 7 طن/24 ساعة DO، وفي الميناء 0.5 طن/24 ساعة MGO. إنمارسات 467100467.',
+      'المدير: NELLY SHIPPING COMPANY، 51 شارع رأس البر، دمياط، IMO 6403821. المالك: تسجيل C-120292، 80 Broad Street، Monrovia، ليبيريا، IMO 5940907. ميناء التسجيل فريتاون. الرقم الرسمي SLR10843، التسجيل VHQ-200-22-1944، MMSI 667002053، رقم التصنيف G30460. البناء J.J. Sietas رقم 860. الطول بين القائمين 90.36 م، والعمق للسطح العلوي 8.50 م. الغاطس شتاء 6.674 م، والحمولة الساكنة شتاء 5476 طن. الإزاحة 7780.5 / 7579.8 طن، الفري بورد الصيفي 1684 مم، الغاطس الهوائي 36.50 م، الوزن الخفيف 2103.80 طن. محركان مساعدان KHD AB 6M816 LLK-U، 257 ك.و / 350 حصان، 1500 لفة، MDO. مولدات PILLER ومولد عمود 300 ك.ف.أ. دافع مقدمة PLEUGER WM110-300. رفاص BERG 900H4 قطر 3800 مم. العنبر 52 × 12.6 × 8.275 م، فتحتان 25.15 × 12.57 م. تحميل الغطاء 1.65 طن/م² والقاع 10 طن/م². استهلاك الرحلة الأخيرة: ديزل 6.025 طن/يوم وهي ماشية و0.30 طن/يوم وهي واقفة. إنمارسات 467100467.',
   };
 }
 
-/** عنبر واحد كما في بطاقة المواصفات، والسعة هي سعة الحبوب بالمتر المكعب. */
+/** مخطط سعة الخزانات بالمتر المكعب، من مقدمة السفينة إلى مؤخرتها. */
 export function amanyHolds(): Hold[] {
-  return [{ id: 'h1', name: 'العنبر', capacity: 5540, loaded: 0 }];
+  const row = (id: string, name: string, capacity: number): Hold => ({ id, name, capacity, loaded: 0 });
+  return [
+    row('fp', 'مقدمة السفينة (Fore Peak)', 147.32),
+    row('deep', 'الخزان العميق (Deep Tank)', 148.48),
+    row('wing-p', 'خزان جانبي — ميناء (Wing Tank)', 406.03),
+    row('db1-p', 'قاع مزدوج 1 — ميناء', 120.59),
+    row('db1-mgo', 'قاع مزدوج 1 — ديزل الوسط', 49.19),
+    row('db1-s', 'قاع مزدوج 1 — ميمنة', 120.59),
+    row('wing-s', 'خزان جانبي — ميمنة (Wing Tank)', 406.03),
+    row('db2-p', 'قاع مزدوج 2 — ميناء', 116.38),
+    row('db2-hfo-p', 'قاع مزدوج 2 — فيول ميناء', 109.01),
+    row('db2-hfo-s', 'قاع مزدوج 2 — فيول ميمنة', 109.01),
+    row('db2-s', 'قاع مزدوج 2 — ميمنة', 116.38),
+    row('db3-p', 'قاع مزدوج 3 — ميناء', 75.42),
+    row('db3-mgo', 'قاع مزدوج 3 — ديزل الوسط', 132.12),
+    row('db3-s', 'قاع مزدوج 3 — ميمنة', 75.42),
+    row('fw-p', 'مياه عذبة — ميناء', 23.37),
+    row('ap', 'مؤخرة السفينة (After Peak)', 177.25),
+    row('fw-s', 'مياه عذبة — ميمنة', 16.77),
+  ];
 }
 
 export function amanyConfig(): ShipConfig {
   return {
     ...emptyConfig(),
-    mgoTonsPerDayPort: 0.5,
-    dailyRates: [
-      { kind: 'Diesel', motion: 'Sailing', tonsPerDay: 7 },
-      { kind: 'Diesel', motion: 'Stopped', tonsPerDay: 0.5 },
-    ],
+    mgoTonsPerDayPort: 0.3,
+    dailyRates: amanyDailyRates(),
+    fixedCosts: amanyFixedCosts(),
     generators: [
       { id: 'g1', name: 'PILLER NKT 350-4 — 300 KVA', tonsPerHour: 0, defaultHours: 0 },
       { id: 'g2', name: 'PILLER NKT 350-4 — 300 KVA', tonsPerHour: 0, defaultHours: 0 },

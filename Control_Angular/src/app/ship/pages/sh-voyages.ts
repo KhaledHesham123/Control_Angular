@@ -24,6 +24,75 @@ const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b'
         }
       </div>
 
+      @if (s.can('voyages')) {
+        <section class="card">
+          <div class="card-head"><h2>إنشاء رحلة جديدة</h2></div>
+          <div class="card-body stack">
+            <div class="form-grid">
+              <label class="field"><span>رقم الرحلة</span><input type="text" [(ngModel)]="draft.number" placeholder="AQ-004" /></label>
+              <label class="field">
+                <span>خرجت من</span>
+                <select [(ngModel)]="draft.fromPortId">
+                  <option value="">—</option>
+                  @for (p of s.ports(); track p.id) {
+                    <option [value]="p.id">{{ p.name }}</option>
+                  }
+                </select>
+              </label>
+              <label class="field">
+                <span>رايحة إلى</span>
+                <select [(ngModel)]="draft.toPortId">
+                  <option value="">—</option>
+                  @for (p of s.ports(); track p.id) {
+                    <option [value]="p.id">{{ p.name }}</option>
+                  }
+                </select>
+              </label>
+              <div class="field wide">
+                <span>الموانئ اللي هتعدي عليها</span>
+                <div class="row">
+                  <select [(ngModel)]="draft.viaPick">
+                    <option value="">اختار ميناء</option>
+                    @for (p of s.ports(); track p.id) {
+                      <option [value]="p.id">{{ p.name }}</option>
+                    }
+                  </select>
+                  <button type="button" class="btn btn-sm" (click)="addVia()">إضافة</button>
+                </div>
+                @for (id of draft.viaPortIds; track $index) {
+                  <div class="row">
+                    <span>{{ $index + 1 }}. {{ portName(id) }}</span>
+                    <button type="button" class="btn btn-sm" [disabled]="$index === 0" (click)="moveVia($index, -1)">↑</button>
+                    <button type="button" class="btn btn-sm" [disabled]="$index === draft.viaPortIds.length - 1" (click)="moveVia($index, 1)">↓</button>
+                    <button type="button" class="btn btn-sm btn-ghost btn-danger" (click)="removeVia($index)">حذف</button>
+                  </div>
+                }
+                @if (!draft.viaPortIds.length) {
+                  <div class="muted small">لسه مفيش موانئ عبور.</div>
+                }
+              </div>
+              @if (draftRoute()) {
+                <div class="hint wide">المسار: {{ draftRoute() }}</div>
+              }
+              <label class="field">
+                <span>الحالة</span>
+                <select [(ngModel)]="draft.status">
+                  @for (st of statuses; track st.id) {
+                    <option [value]="st.id">{{ st.label }}</option>
+                  }
+                </select>
+              </label>
+              <label class="field"><span>تاريخ البداية</span><input type="date" [(ngModel)]="draft.startDate" /></label>
+              <label class="field"><span>تاريخ النهاية</span><input type="date" [(ngModel)]="draft.endDate" /></label>
+            </div>
+            <div class="actions">
+              <button type="button" class="btn btn-primary" (click)="createVoyage()"><sc-icon name="check" /> إنشاء الرحلة</button>
+              <button type="button" class="btn" (click)="openEdit()">تفاصيل أكتر</button>
+            </div>
+          </div>
+        </section>
+      }
+
       <div class="grid" style="grid-template-columns: 300px minmax(0, 1fr); align-items: start">
         <section class="card">
           <div class="card-head"><h3>الرحلات ({{ s.voyages().length }})</h3></div>
@@ -55,16 +124,19 @@ const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b'
                   <small>{{ v.number }} · {{ dateLabel(v.startDate) }} ← {{ v.endDate ? dateLabel(v.endDate) : 'مستمرة' }}</small>
                 </div>
                 <div class="actions">
-                  <span class="badge" [class]="'badge ' + statusTone(v.status)">{{ statusLabel(v.status) }}</span>
                   @if (s.can('voyages')) {
-                    @if (v.status === 'planned') {
-                      <button type="button" class="btn btn-sm btn-primary" (click)="s.setVoyageStatus(v.id, 'active')"><sc-icon name="route" /> بدء الرحلة</button>
-                    }
-                    @if (v.status === 'active') {
-                      <button type="button" class="btn btn-sm btn-primary" (click)="s.setVoyageStatus(v.id, 'completed')"><sc-icon name="check" /> إنهاء الرحلة</button>
-                    }
+                    <label class="field" style="min-width: 180px; margin: 0">
+                      <span>حالة الرحلة</span>
+                      <select [ngModel]="v.status" (ngModelChange)="changeStatus(v, $event)">
+                        @for (st of statuses; track st.id) {
+                          <option [value]="st.id">{{ st.label }}</option>
+                        }
+                      </select>
+                    </label>
                     <button type="button" class="btn btn-sm" (click)="openEdit(v)"><sc-icon name="edit" /> تعديل المسار</button>
                     <button type="button" class="btn btn-sm btn-danger" (click)="remove(v)"><sc-icon name="trash" /></button>
+                  } @else {
+                    <span class="badge" [class]="'badge ' + statusTone(v.status)">{{ statusLabel(v.status) }}</span>
                   }
                 </div>
               </div>
@@ -80,6 +152,39 @@ const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b'
                     </div>
                   }
                 </div>
+                @if (v.sheet; as sheet) {
+                  <div class="kpis">
+                    <div class="kpi"><label>الشحنة</label><strong>{{ sheet.cargoType }}</strong><small>{{ sheet.destination }}</small></div>
+                    <div class="kpi"><label>الوكيل</label><strong>{{ sheet.agent }}</strong><small>{{ sheet.daContact || sheet.exporter }}</small></div>
+                    @if (sheet.daAmount != null) {
+                      <div class="kpi gold"><label>مصاريف الوكيل</label><strong>{{ usd(sheet.daAmount, 2) }}</strong></div>
+                    }
+                    <div class="kpi"><label>حالة الشيت</label><strong>{{ sheet.operation === 'Complete' ? 'مكتملة' : 'مخطاف' }}</strong></div>
+                  </div>
+                  <div class="grid g2">
+                    @for (load of sheet.loads; track load.place + load.start) {
+                      <div class="hint">
+                        <b>تحميل {{ load.type }}</b>
+                        <div>{{ load.place }} · {{ dateLabel(load.start) }} ← {{ dateLabel(load.end) }} · {{ load.days }}</div>
+                        <div class="num">{{ fmt(load.qty, 2) }} طن</div>
+                      </div>
+                    }
+                    @for (out of sheet.discharges; track out.place + out.type) {
+                      <div class="hint">
+                        <b>تفريغ {{ out.type }}</b>
+                        <div>{{ out.place }} · {{ out.start ? dateLabel(out.start) + ' ← ' + dateLabel(out.end) + ' · ' + out.days : 'لم يبدأ' }}</div>
+                        @if (out.qty != null) { <div class="num">{{ fmt(out.qty, 2) }} طن</div> }
+                        @if (out.shortage) { <div>عجز {{ fmt(out.shortage, 2) }} طن</div> }
+                      </div>
+                    }
+                  </div>
+                  <div class="muted small">
+                    المصدّر {{ sheet.exporter }}
+                    @if (sheet.sailingTime) { · الإبحار {{ sheet.sailingTime }} }
+                    @if (sheet.anchorTime) { · المخطاف {{ sheet.anchorTime }} }
+                    @if (sheet.totalTime) { · الإجمالي {{ sheet.totalTime }} }
+                  </div>
+                }
                 @if (v.notes) { <div class="hint">{{ v.notes }}</div> }
               </div>
             </section>
@@ -182,7 +287,7 @@ const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b'
                         @for (e of expenses(); track e.id) {
                           <tr>
                             <td>{{ e.label }}<div class="muted small">{{ dateLabel(e.date) }} {{ e.note }}</div></td>
-                            <td class="end num">{{ usd(e.amount) }}</td>
+                            <td class="end num">{{ usd(e.amount, 2) }}</td>
                             <td class="end tight"><button type="button" class="btn btn-sm btn-ghost btn-danger" (click)="s.deleteExpense(e.id)"><sc-icon name="trash" /></button></td>
                           </tr>
                         }
@@ -226,7 +331,43 @@ const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b'
           <div class="modal-body">
             <div class="form-grid">
               <label class="field"><span>رقم الرحلة</span><input type="text" [(ngModel)]="form.number" /></label>
-              <label class="field wide"><span>العنوان</span><input type="text" [(ngModel)]="form.title" placeholder="مثال: دمياط ← جدة ← سنغافورة" /></label>
+              <label class="field">
+                <span>خرجت من</span>
+                <select [(ngModel)]="formRoute.fromPortId" (ngModelChange)="onFormRouteChange()">
+                  <option value="">—</option>
+                  @for (p of s.ports(); track p.id) {
+                    <option [value]="p.id">{{ p.name }}</option>
+                  }
+                </select>
+              </label>
+              <label class="field">
+                <span>رايحة إلى</span>
+                <select [(ngModel)]="formRoute.toPortId" (ngModelChange)="onFormRouteChange()">
+                  <option value="">—</option>
+                  @for (p of s.ports(); track p.id) {
+                    <option [value]="p.id">{{ p.name }}</option>
+                  }
+                </select>
+              </label>
+              <div class="field wide">
+                <span>الموانئ اللي هتعدي عليها</span>
+                <div class="row">
+                  <select [(ngModel)]="formRoute.viaPick">
+                    <option value="">اختار ميناء</option>
+                    @for (p of s.ports(); track p.id) {
+                      <option [value]="p.id">{{ p.name }}</option>
+                    }
+                  </select>
+                  <button type="button" class="btn btn-sm" (click)="addFormVia()">إضافة</button>
+                </div>
+                @for (id of formRoute.viaPortIds; track $index) {
+                  <div class="row">
+                    <span>{{ $index + 1 }}. {{ portName(id) }}</span>
+                    <button type="button" class="btn btn-sm btn-ghost btn-danger" (click)="removeFormVia($index)">حذف</button>
+                  </div>
+                }
+                @if (form.title) { <div class="hint">المسار: {{ form.title }}</div> }
+              </div>
               <label class="field">
                 <span>الحالة</span>
                 <select [(ngModel)]="form.status">
@@ -346,6 +487,8 @@ export class ShVoyages {
   form: Voyage | null = null;
   isNew = false;
   exp: { label: string; amount: number; date: string; note: string } | null = null;
+  draft = { number: '', fromPortId: '', toPortId: '', viaPortIds: [] as string[], viaPick: '', status: 'planned' as VoyageStatus, startDate: today(), endDate: '' };
+  formRoute = { fromPortId: '', toPortId: '', viaPortIds: [] as string[], viaPick: '' };
 
   readonly list = computed(() => [...this.s.voyages()].sort((a, b) => b.startDate.localeCompare(a.startDate)));
   readonly current = computed(() => this.s.voyages().find((v) => v.id === this.selected()) ?? this.s.activeVoyage() ?? this.list()[0] ?? null);
@@ -375,7 +518,7 @@ export class ShVoyages {
     for (const [id, value] of Object.entries(c.purchasesByGroup)) {
       out.push({ label: `مشتريات — ${cats.find((x) => x.id === id)?.name ?? id}`, value, color: COLORS[i++ % COLORS.length] });
     }
-    out.push({ label: 'وقود (تزويد)', value: c.bunker, color: '#d4a857' });
+    out.push({ label: 'وقود وزيوت ومياه', value: c.bunker, color: '#d4a857' });
     out.push({ label: 'رسوم موانئ', value: c.port, color: '#2b6cb0' });
     out.push({ label: 'رواتب الطاقم', value: c.crew, color: '#6b4fb3' });
     out.push({ label: 'مصروفات أخرى', value: c.other, color: '#9aa7b0' });
@@ -431,16 +574,131 @@ export class ShVoyages {
 
   /* ── تعديل ── */
 
+  changeStatus(v: Voyage, status: VoyageStatus): void {
+    if (v.status === status) return;
+    this.s.setVoyageStatus(v.id, status);
+  }
+
+  draftRoute(): string {
+    return this.routeTitle(this.draft.fromPortId, this.draft.viaPortIds, this.draft.toPortId);
+  }
+
+  addVia(): void {
+    if (!this.draft.viaPick) return;
+    this.draft.viaPortIds = [...this.draft.viaPortIds, this.draft.viaPick];
+    this.draft.viaPick = '';
+  }
+
+  removeVia(index: number): void {
+    this.draft.viaPortIds = this.draft.viaPortIds.filter((_, i) => i !== index);
+  }
+
+  moveVia(index: number, step: number): void {
+    const next = index + step;
+    const ids = [...this.draft.viaPortIds];
+    if (next < 0 || next >= ids.length) return;
+    const [item] = ids.splice(index, 1);
+    ids.splice(next, 0, item);
+    this.draft.viaPortIds = ids;
+  }
+
+  addFormVia(): void {
+    if (!this.formRoute.viaPick) return;
+    this.formRoute.viaPortIds = [...this.formRoute.viaPortIds, this.formRoute.viaPick];
+    this.formRoute.viaPick = '';
+    this.onFormRouteChange();
+  }
+
+  removeFormVia(index: number): void {
+    this.formRoute.viaPortIds = this.formRoute.viaPortIds.filter((_, i) => i !== index);
+    this.onFormRouteChange();
+  }
+
+  onFormRouteChange(): void {
+    const form = this.form;
+    if (!form) return;
+    form.title = this.routeTitle(this.formRoute.fromPortId, this.formRoute.viaPortIds, this.formRoute.toPortId);
+    if ((this.isNew || !form.stops.length) && this.formRoute.fromPortId && this.formRoute.toPortId) {
+      form.stops = this.stopsFromPorts(this.routePortIds(this.formRoute.fromPortId, this.formRoute.viaPortIds, this.formRoute.toPortId), form.startDate, form.endDate);
+    }
+  }
+
+  createVoyage(): void {
+    const number = this.draft.number.trim();
+    const title = this.draftRoute();
+    if (!this.draft.fromPortId || !this.draft.toPortId) {
+      this.s.notify('اختار ميناء الخروج وميناء الوصول.', 'warn');
+      return;
+    }
+    const n = this.s.voyages().length + 1;
+    const start = this.draft.startDate || today();
+    const voyage: Voyage = {
+      id: this.s.nextVoyageId(),
+      number: number || `V-${new Date().getFullYear()}-${String(n).padStart(2, '0')}`,
+      title,
+      status: this.draft.status,
+      startDate: start,
+      endDate: this.draft.endDate,
+      stops: this.stopsFromPorts(this.routePortIds(this.draft.fromPortId, this.draft.viaPortIds, this.draft.toPortId), start, this.draft.endDate),
+      notes: '',
+      expectedHfo: 0,
+      expectedMgo: 0,
+      expectedLube: 0,
+      consumptions: [],
+    };
+    this.s.saveVoyage(voyage);
+    this.selected.set(voyage.id);
+    this.draft = { number: '', fromPortId: '', toPortId: '', viaPortIds: [], viaPick: '', status: 'planned', startDate: today(), endDate: '' };
+  }
+
+  private routeTitle(fromId: string, viaIds: string[], toId: string): string {
+    return this.routePortIds(fromId, viaIds, toId).map((id) => this.portName(id)).filter((name) => name !== '—').join(' ← ');
+  }
+
+  private routePortIds(fromId: string, viaIds: string[], toId: string): string[] {
+    return [fromId, ...viaIds, toId].filter((id) => !!id);
+  }
+
+  private stopsFromPorts(portIds: string[], start: string, end: string): PortStop[] {
+    const span = end && end > start ? Math.max(1, daysBetween(start, end)) : Math.max(1, portIds.length - 1);
+    return portIds.map((portId, index) => {
+      const offset = portIds.length <= 1 ? 0 : Math.round((span * index) / (portIds.length - 1));
+      const eta = addDays(start || today(), offset);
+      const stop: PortStop = {
+        id: uid('stop'),
+        portId,
+        eta,
+        etd: index === portIds.length - 1 ? eta : addDays(eta, 1),
+        activities: index === 0 ? [] : index === portIds.length - 1 ? ['تفريغ'] : [],
+        berthFee: 0,
+        pilotFee: 0,
+        canalFee: 0,
+        agencyFee: 0,
+        actualFda: 0,
+        agent: '',
+        legNm: null,
+        legFuelT: null,
+      };
+      this.fill(stop);
+      return stop;
+    });
+  }
+
   openEdit(v?: Voyage): void {
     this.isNew = !v;
     const n = this.s.voyages().length + 1;
     this.form = v
       ? { ...v, stops: v.stops.map((st) => ({ ...st, activities: [...st.activities] })) }
-      : { id: this.s.nextVoyageId(), number: `V-${new Date().getFullYear()}-${String(n).padStart(2, '0')}`, title: '', status: 'planned', startDate: today(), endDate: '', stops: [], notes: '', expectedHfo: 0, expectedMgo: 0, expectedLube: 0, consumptions: [] };
+      : { id: this.s.nextVoyageId(), number: this.draft.number.trim() || `V-${new Date().getFullYear()}-${String(n).padStart(2, '0')}`, title: this.draftRoute(), status: this.draft.status, startDate: this.draft.startDate || today(), endDate: this.draft.endDate, stops: [], notes: '', expectedHfo: 0, expectedMgo: 0, expectedLube: 0, consumptions: [] };
+    const ids = (v?.stops ?? []).map((stop) => stop.portId);
+    this.formRoute = v
+      ? { fromPortId: ids[0] ?? '', toPortId: ids.length > 1 ? ids[ids.length - 1] : '', viaPortIds: ids.slice(1, -1), viaPick: '' }
+      : { fromPortId: this.draft.fromPortId, toPortId: this.draft.toPortId, viaPortIds: [...this.draft.viaPortIds], viaPick: '' };
     if (this.form) {
       this.form = { ...this.form, consumptions: this.consumptionOf(this.form) };
     }
     if (this.isNew && this.form) {
+      this.onFormRouteChange();
       this.fillConsumption();
     }
   }
@@ -602,6 +860,9 @@ export class ShVoyages {
   save(): void {
     const f = this.form;
     if (!f) return;
+    if (this.formRoute.fromPortId && this.formRoute.toPortId) {
+      f.title = this.routeTitle(this.formRoute.fromPortId, this.formRoute.viaPortIds, this.formRoute.toPortId);
+    }
     if (!f.title.trim()) {
       const first = f.stops[0];
       const last = f.stops[f.stops.length - 1];

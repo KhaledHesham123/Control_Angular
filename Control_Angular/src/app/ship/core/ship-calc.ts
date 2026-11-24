@@ -113,7 +113,7 @@ export function gaugeOf(current: number, max: number): Gauge {
 }
 
 export function tanksOf(tanks: Tank[], kind: TankKind): Tank[] {
-  return tanks.filter((t) => t.kind === kind);
+  return tanks.filter((t) => t.kind === kind && (t.unit ?? 'طن') !== 'لتر');
 }
 
 export function kindGauge(tanks: Tank[], kind: TankKind): Gauge {
@@ -160,7 +160,7 @@ export function voyageSpanDays(voyage: Pick<Voyage, 'startDate' | 'endDate'>): n
   if (!voyage.startDate) {
     return 1;
   }
-  const end = voyage.endDate && voyage.endDate > voyage.startDate ? voyage.endDate : voyage.startDate;
+  const end = voyage.endDate && voyage.endDate > voyage.startDate ? voyage.endDate : today();
   return Math.max(1, daysBetween(voyage.startDate, end) || 1);
 }
 
@@ -256,20 +256,23 @@ export function collapseTanks(tanks: Tank[]): Tank[] {
   const kinds: TankKind[] = ['hfo', 'mgo', 'lube', 'water'];
   return kinds.flatMap((kind) => {
     const list = tanks.filter((tank) => tank.kind === kind);
-    if (!list.length) {
-      return [];
+    const kept = list.filter((tank) => tank.unit === 'لتر' || tank.bob != null);
+    const plain = list.filter((tank) => !kept.includes(tank));
+    if (!plain.length) {
+      return kept;
     }
-    if (list.length === 1 && list[0].id === kind) {
-      return list;
+    if (plain.length === 1 && plain[0].id === kind) {
+      return [...plain, ...kept];
     }
     return [
       {
         id: kind,
         name: TANK_SINGLE_NAME[kind],
         kind,
-        current: round(list.reduce((sum, tank) => sum + num(tank.current), 0), 2),
-        max: round(list.reduce((sum, tank) => sum + num(tank.max), 0), 2),
+        current: round(plain.reduce((sum, tank) => sum + num(tank.current), 0), 2),
+        max: round(plain.reduce((sum, tank) => sum + num(tank.max), 0), 2),
       },
+      ...kept,
     ];
   });
 }
@@ -575,11 +578,19 @@ export function voyageCost(voyage: Voyage, data: VesselData, categories: Categor
     }
   }
   const purchases = Object.values(purchasesByGroup).reduce((s, v) => s + v, 0);
-  const bunker = data.bunkers.filter((b) => b.voyageId === voyage.id).reduce((s, b) => s + b.qty * b.pricePerTon, 0);
-  const port = voyage.stops.reduce((s, st) => s + stopFees(st), 0);
   const end = voyageEnd(voyage);
-  const crew = crewCostForPeriod(data.crew, voyage.startDate, end);
-  const other = data.expenses.filter((e) => e.voyageId === voyage.id).reduce((s, e) => s + e.amount, 0);
+  let bunker = data.bunkers.filter((b) => b.voyageId === voyage.id).reduce((s, b) => s + b.qty * b.pricePerTon, 0);
+  let port = voyage.stops.reduce((s, st) => s + stopFees(st), 0);
+  let sheetCrew = 0;
+  let other = 0;
+  for (const expense of data.expenses) {
+    if (expense.voyageId !== voyage.id) continue;
+    if (expense.category === 'fuel') bunker += expense.amount;
+    else if (expense.category === 'port') port += expense.amount;
+    else if (expense.category === 'crew') sheetCrew += expense.amount;
+    else other += expense.amount;
+  }
+  const crew = sheetCrew > 0 ? sheetCrew : crewCostForPeriod(data.crew, voyage.startDate, end);
   return {
     purchasesByGroup,
     purchases,

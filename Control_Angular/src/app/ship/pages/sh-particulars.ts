@@ -77,15 +77,15 @@ import { Certificate, Hold, VesselProfile } from '../core/ship.types';
       </fieldset>
 
       <section class="card">
-        <div class="card-head"><h2>سعة العنابر</h2></div>
+        <div class="card-head"><h2>سعة العنابر والخزانات</h2></div>
         <div class="card-body stack">
           @if (drawingHolds()) {
             <div class="kpis">
-              <div class="kpi"><label>عدد العنابر</label><strong>{{ s.data().holds.length }}</strong></div>
-              <div class="kpi ok"><label>سعة الحبوب</label><strong>{{ fmt(totalCap(), 0) }} م³</strong></div>
-              <div class="kpi gold"><label>الفتحتان</label><strong>25.15 × 12.57 م</strong></div>
+              <div class="kpi"><label>عدد الخزانات</label><strong>{{ s.data().holds.length }}</strong></div>
+              <div class="kpi ok"><label>إجمالي المخطط</label><strong>{{ fmt(totalCap(), 2) }} م³</strong></div>
+              <div class="kpi gold"><label>سعة الحبوب</label><strong>{{ fmt(f.grainCapacity, 0) }} م³</strong></div>
             </div>
-            <p class="muted small">عنبر واحد أبعاده 52 × 12.6 × 8.275 م، وفتحتان من نوع McGregor. الرقم سعة الحبوب بالمتر المكعب، مش حمولة بالطن.</p>
+            <p class="muted small">الأرقام من مخطط سعة الخزانات بالمتر المكعب، من المقدمة إلى المؤخرة. سعة عنبر البضاعة 5,540 م³ حبوب وأبعاده 52 × 12.6 × 8.275 م، والفتحتان 25.15 × 12.57 م.</p>
           } @else {
             <div class="kpis">
               <div class="kpi"><label>السعة الكلية</label><strong>{{ fmt(totalCap(), 0) }} طن</strong></div>
@@ -98,7 +98,7 @@ import { Certificate, Hold, VesselProfile } from '../core/ship.types';
               <section class="card">
                 <div class="card-head"><h3>{{ h.name }}</h3>@if (!drawingHolds()) { <span class="badge info">{{ fmt(g(h).percent, 0) }}%</span> }</div>
                 <div class="card-body stack">
-                  <div class="value" style="font-size:1.4rem;font-weight:800"><span class="num">{{ fmt(drawingHolds() ? h.capacity : h.loaded, 0) }}</span> <small class="muted">{{ drawingHolds() ? 'م³ حبوب' : '/ ' + fmt(h.capacity, 0) + ' طن' }}</small></div>
+                  <div class="value" style="font-size:1.4rem;font-weight:800"><span class="num">{{ fmt(drawingHolds() ? h.capacity : h.loaded, drawingHolds() ? 2 : 0) }}</span> <small class="muted">{{ drawingHolds() ? 'م³' : '/ ' + fmt(h.capacity, 0) + ' طن' }}</small></div>
                   @if (!drawingHolds()) {
                     <div class="gauge" [class]="'gauge ' + (g(h).percent > 90 ? 'bad' : 'ok')"><i [style.width.%]="g(h).percent"></i></div>
                     <div class="muted small">المتاح {{ fmt(h.capacity - h.loaded, 0) }} طن</div>
@@ -109,6 +109,7 @@ import { Certificate, Hold, VesselProfile } from '../core/ship.types';
                       <button type="button" class="btn btn-sm" (click)="s.setHoldLoad(h.id, num(inp.value))">تحديث يدوي</button>
                     </div>
                   }
+                  @if (!drawingHolds()) {
                   <div>
                     <b class="small">الشحنات في هذا العنبر</b>
                     @for (x of shipmentsIn(h.name); track x.id) {
@@ -118,6 +119,7 @@ import { Certificate, Hold, VesselProfile } from '../core/ship.types';
                     }
                     @if (!shipmentsIn(h.name).length) { <div class="muted small">لا شحنات.</div> }
                   </div>
+                  }
                 </div>
               </section>
             }

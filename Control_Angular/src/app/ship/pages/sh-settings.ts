@@ -1,7 +1,8 @@
 import { Component, effect, inject, untracked } from '@angular/core';
 import { num, uid } from '../core/ship-calc';
+import { usd } from '../core/ship-format';
 import { ShipStore } from '../core/ship-store';
-import { DailyKind, DailyMotion, DailyRate, ShipConfig, StatusLogEntry } from '../core/ship.types';
+import { DailyKind, DailyMotion, DailyRate, FixedCost, ShipConfig, StatusLogEntry } from '../core/ship.types';
 
 @Component({
   selector: 'sh-settings',
@@ -44,19 +45,82 @@ import { DailyKind, DailyMotion, DailyRate, ShipConfig, StatusLogEntry } from '.
       </section>
 
       <section class="card">
-        <div class="card-head"><h2>استهلاك السفينة الثابت</h2><small>مش مرتبط برحلة</small></div>
+        <div class="card-head"><h2>استهلاك السفينة الثابت</h2><small>معدلات السفينة نفسها، والحساب مش مربوط برحلة واحدة</small></div>
         <div class="card-body flush table-wrap">
           <table class="tbl">
-            <thead><tr><th>النوع</th><th>وهي ماشية (طن/يوم)</th><th>وهي واقفة (طن/يوم)</th><th></th></tr></thead>
+            <thead>
+              <tr>
+                <th>النوع</th>
+                <th>وهي ماشية</th>
+                <th>وهي واقفة</th>
+                <th>سعر الوحدة $</th>
+                <th>تكلفة اليوم ماشية</th>
+                <th>تكلفة اليوم واقفة</th>
+                <th></th>
+              </tr>
+            </thead>
             <tbody>
               @for (kind of kinds; track kind.id) {
                 <tr>
-                  <td>{{ kind.label }}</td>
+                  <td>{{ kind.label }} <span class="muted small">{{ kind.unit }}</span><div class="muted small">{{ rateNote(kind.id) }}</div></td>
                   <td><input type="number" min="0" step="any" [ngModel]="rateValue(kind.id, 'Sailing')" (ngModelChange)="editRate(kind.id, 'Sailing', $event)" /></td>
                   <td><input type="number" min="0" step="any" [ngModel]="rateValue(kind.id, 'Stopped')" (ngModelChange)="editRate(kind.id, 'Stopped', $event)" /></td>
+                  <td><input type="number" min="0" step="any" [ngModel]="ratePrice(kind.id)" (ngModelChange)="editPrice(kind.id, $event)" /></td>
+                  <td class="num">{{ usd(dayCost(kind.id, 'Sailing'), 2) }}</td>
+                  <td class="num">{{ usd(dayCost(kind.id, 'Stopped'), 2) }}</td>
                   <td class="end"><button type="button" class="btn btn-sm btn-primary" [disabled]="!canEdit()" (click)="saveKind(kind.id)">حفظ</button></td>
                 </tr>
               }
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>التكاليف الثابتة في اليوم</h2><small>تتحملها السفينة وهي ماشية أو واقفة</small></div>
+        <div class="card-body flush table-wrap">
+          <table class="tbl">
+            <thead><tr><th>البند</th><th>دولار / يوم</th><th>الأساس</th></tr></thead>
+            <tbody>
+              @for (row of fixedCosts; track row.code) {
+                <tr>
+                  <td>{{ row.label }}</td>
+                  <td><input type="number" min="0" step="any" [(ngModel)]="row.amountPerDay" /></td>
+                  <td class="small">{{ row.note }}</td>
+                </tr>
+              }
+            </tbody>
+            <tfoot>
+              <tr><td>طاقم + مطبخ</td><td class="num">{{ usd(fixedSum(['crew', 'kitchen']), 2) }}</td><td></td></tr>
+              <tr><td>المخصصات</td><td class="num">{{ usd(fixedSum(['maintenance', 'insurance', 'certificates', 'management']), 2) }}</td><td></td></tr>
+              <tr><td>الإجمالي الثابت</td><td class="num">{{ usd(fixedSum(), 2) }}</td><td></td></tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>السفينة بتكلف كام في اليوم</h2></div>
+        <div class="card-body flush table-wrap">
+          <table class="tbl">
+            <thead><tr><th>الحالة</th><th>محروقات وزيوت ومياه</th><th>طاقم وإعاشة</th><th>الصرف المباشر</th><th>مع المخصصات</th><th>في الساعة</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>وهي واقفة (0.30 طن ديزل)</td>
+                <td class="num">{{ usd(fuelDay('Stopped'), 2) }}</td>
+                <td class="num">{{ usd(fixedSum(['crew', 'kitchen']), 2) }}</td>
+                <td class="num">{{ usd(fuelDay('Stopped') + fixedSum(['crew', 'kitchen']), 2) }}</td>
+                <td class="num">{{ usd(fuelDay('Stopped') + fixedSum(), 2) }}</td>
+                <td class="num">{{ usd((fuelDay('Stopped') + fixedSum(['crew', 'kitchen'])) / 24, 2) }} – {{ usd((fuelDay('Stopped') + fixedSum()) / 24, 2) }}</td>
+              </tr>
+              <tr>
+                <td>وهي ماشية (6.025 طن ديزل)</td>
+                <td class="num">{{ usd(fuelDay('Sailing'), 2) }}</td>
+                <td class="num">{{ usd(fixedSum(['crew', 'kitchen']), 2) }}</td>
+                <td class="num">{{ usd(fuelDay('Sailing') + fixedSum(['crew', 'kitchen']), 2) }}</td>
+                <td class="num">{{ usd(fuelDay('Sailing') + fixedSum(), 2) }}</td>
+                <td class="num">{{ usd((fuelDay('Sailing') + fixedSum(['crew', 'kitchen'])) / 24, 2) }} – {{ usd((fuelDay('Sailing') + fixedSum()) / 24, 2) }}</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -122,11 +186,14 @@ export class ShSettings {
   c: ShipConfig = this.copy();
   rates: DailyRate[] = [];
   logs: StatusLogEntry[] = [];
-  readonly kinds: { id: DailyKind; label: string }[] = [
-    { id: 'Water', label: 'مياه' },
-    { id: 'Gasoline', label: 'بنزين' },
-    { id: 'Diesel', label: 'ديزل' },
-    { id: 'Lubricant', label: 'زيوت' },
+  readonly usd = usd;
+  fixedCosts: FixedCost[] = [];
+  readonly kinds: { id: DailyKind; label: string; unit: string }[] = [
+    { id: 'Diesel', label: 'ديزل MGO', unit: 'طن/يوم' },
+    { id: 'Water', label: 'مياه عذبة', unit: 'طن/يوم' },
+    { id: 'CylinderOil', label: 'زيت السلندرات', unit: 'لتر/يوم' },
+    { id: 'EngineOil', label: 'زيت الماكينة', unit: 'لتر/يوم' },
+    { id: 'HydraulicOil', label: 'زيت الهيدروليك', unit: 'لتر/يوم' },
   ];
 
   constructor() {
@@ -134,6 +201,8 @@ export class ShSettings {
       const id = this.s.vessel().id;
       untracked(() => {
         this.c = this.copy();
+        this.fixedCosts = (this.c.fixedCosts ?? []).map((row) => ({ ...row }));
+        this.rates = this.c.dailyRates ?? [];
         this.load(id);
       });
     });
@@ -143,7 +212,7 @@ export class ShSettings {
     this.s.dailyRates().subscribe((rows) => {
       if (this.s.vessel().id !== id) return;
       const local = this.s.data().config.dailyRates ?? [];
-      const rates = rows.length ? rows : local;
+      const rates = this.mergeRates(local, rows);
       this.rates = rates;
       this.c = { ...this.c, dailyRates: rates };
       if (rows.length) this.s.applyDailyRates(rows);
@@ -162,21 +231,73 @@ export class ShSettings {
     return this.s.can('fleet') || this.s.can('daily');
   }
 
+  private mergeRates(local: DailyRate[], server: DailyRate[]): DailyRate[] {
+    if (!server.length) return local;
+    const merged = new Map(local.map((row) => [`${row.kind}|${row.motion}`, row]));
+    for (const row of server) {
+      const key = `${row.kind}|${row.motion}`;
+      const prev = merged.get(key);
+      if (prev && row.unitPrice == null && prev.unitPrice != null) continue;
+      merged.set(key, {
+        ...prev,
+        ...row,
+        unit: row.unit || prev?.unit,
+        note: row.note || prev?.note,
+        unitPrice: row.unitPrice ?? prev?.unitPrice,
+        dailyCost: row.dailyCost ?? prev?.dailyCost,
+      });
+    }
+    return [...merged.values()];
+  }
+
+  private rate(kind: DailyKind, motion: DailyMotion): DailyRate | undefined {
+    return this.rates.find((item) => item.kind === kind && item.motion === motion);
+  }
+
   rateValue(kind: DailyKind, motion: DailyMotion): number {
-    return this.rates.find((item) => item.kind === kind && item.motion === motion)?.tonsPerDay ?? 0;
+    return this.rate(kind, motion)?.tonsPerDay ?? 0;
+  }
+
+  ratePrice(kind: DailyKind): number {
+    return this.rate(kind, 'Sailing')?.unitPrice ?? this.rate(kind, 'Stopped')?.unitPrice ?? 0;
+  }
+
+  rateNote(kind: DailyKind): string {
+    return this.rate(kind, 'Sailing')?.note || this.rate(kind, 'Stopped')?.note || '';
+  }
+
+  dayCost(kind: DailyKind, motion: DailyMotion): number {
+    const row = this.rate(kind, motion);
+    if (!row) return 0;
+    if (row.dailyCost != null) return row.dailyCost;
+    return num(row.tonsPerDay) * num(row.unitPrice);
+  }
+
+  fuelDay(motion: DailyMotion): number {
+    return this.kinds.reduce((sum, kind) => sum + this.dayCost(kind.id, motion), 0);
+  }
+
+  fixedSum(codes?: string[]): number {
+    return this.fixedCosts.filter((row) => !codes || codes.includes(row.code)).reduce((sum, row) => sum + num(row.amountPerDay), 0);
   }
 
   editRate(kind: DailyKind, motion: DailyMotion, value: number): void {
     const tonsPerDay = num(value);
     const current = this.rates.find((item) => item.kind === kind && item.motion === motion);
     this.rates = current
-      ? this.rates.map((item) => (item.kind === kind && item.motion === motion ? { ...item, tonsPerDay } : item))
+      ? this.rates.map((item) => (item.kind === kind && item.motion === motion ? { ...item, tonsPerDay, dailyCost: undefined } : item))
       : [...this.rates, { kind, motion, tonsPerDay }];
+  }
+
+  editPrice(kind: DailyKind, value: number): void {
+    const unitPrice = num(value);
+    this.rates = this.rates.map((item) => (item.kind === kind ? { ...item, unitPrice, dailyCost: undefined } : item));
   }
 
   saveKind(kind: DailyKind): void {
     for (const motion of ['Sailing', 'Stopped'] as DailyMotion[]) {
-      this.s.saveDailyRate({ kind, motion, tonsPerDay: this.rateValue(kind, motion) }, motion === 'Sailing');
+      const row = this.rate(kind, motion) ?? { kind, motion, tonsPerDay: 0 };
+      this.s.saveDailyRate({ ...row, tonsPerDay: num(row.tonsPerDay), unitPrice: num(row.unitPrice) }, motion === 'Sailing');
     }
   }
 
@@ -216,7 +337,10 @@ export class ShSettings {
       foodKgPerPersonDay: num(c.foodKgPerPersonDay),
       waterLitersPerPersonDay: num(c.waterLitersPerPersonDay),
       generators: c.generators.map((g) => ({ ...g, tonsPerHour: num(g.tonsPerHour), defaultHours: num(g.defaultHours) })),
+      dailyRates: this.rates.map((row) => ({ ...row })),
+      fixedCosts: this.fixedCosts.map((row) => ({ ...row, amountPerDay: num(row.amountPerDay) })),
     });
+    for (const row of this.fixedCosts) this.s.saveFixedCost({ ...row, amountPerDay: num(row.amountPerDay) }, true);
   }
 
   reset(): void {

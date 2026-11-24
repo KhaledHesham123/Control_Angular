@@ -1,8 +1,9 @@
 import { Component, computed, inject } from '@angular/core';
 import { gaugeOf, kindGauge, num, round, today, voyageFuelOutlook } from '../core/ship-calc';
+import { AMANY_VOYAGE_ID } from '../core/ship-amany-ops';
 import { dateLabel, fmt, usd } from '../core/ship-format';
 import { ShipStore } from '../core/ship-store';
-import { Tank, TANK_KIND_LABEL, TANK_SINGLE_NAME, TankKind } from '../core/ship.types';
+import { BunkerRecord, Tank, TANK_KIND_LABEL, TANK_SINGLE_NAME, TankKind } from '../core/ship.types';
 
 const KINDS: TankKind[] = ['hfo', 'mgo', 'lube', 'water'];
 
@@ -38,26 +39,45 @@ interface BunkerForm {
           <div class="card-head">
             <h2>{{ k.label }}</h2>
             <span class="muted small">
-              الإجمالي <b class="num">{{ fmt(k.g.current, 1) }}</b> من {{ fmt(k.g.max, 0) }} طن
-              @if (k.outlook.lasts !== null) { · يكفي ~{{ fmt(k.outlook.lasts, 0) }} يوم }
+              @if (k.tanks.length) {
+                {{ k.tanks.length }} خزان
+                @if (k.outlook.lasts !== null) { · يكفي ~{{ fmt(k.outlook.lasts, 0) }} يوم }
+              }
             </span>
           </div>
           <div class="card-body">
-            @if (k.tank; as t) {
+            @for (t of k.tanks; track t.id) {
               <div class="tank-card">
                 <div class="between row">
                   <b>{{ t.name }}</b>
                   <span class="badge" [class]="'badge ' + gauge(t).tone">{{ fmt(gauge(t).percent, 0) }}%</span>
                 </div>
-                <div class="value"><span class="num">{{ fmt(t.current, 2) }}</span> <small class="muted">/ {{ fmt(t.max, 0) }} طن</small></div>
+                <div class="value"><span class="num">{{ fmt(t.current, 2) }}</span> <small class="muted">{{ t.unit || 'طن' }}</small></div>
                 <div class="gauge" [class]="'gauge ' + gauge(t).tone"><i [style.width.%]="gauge(t).percent"></i></div>
-                @if (k.outlook.expected !== null) {
-                  <p class="muted small">
-                    الرحلة {{ s.activeVoyage()?.number }} تستهلك <b class="num">{{ fmt(k.outlook.expected, 1) }}</b> طن من أولها لآخرها
-                    ({{ fmt(k.outlook.spanDays, 0) }} يوم) · المعدل <b class="num">{{ fmt(k.outlook.rate, 2) }}</b> طن/يوم
-                    @if (k.outlook.lasts !== null) { · الكمية تكفي <b class="num">{{ fmt(k.outlook.lasts, 0) }}</b> يوم }
-                  </p>
-                }
+                <dl class="kv" style="grid-template-columns: 140px 1fr">
+                  @if (t.peak != null) {
+                    <dt>أعلى رصيد</dt><dd class="num">{{ fmt(t.peak, 1) }} {{ t.unit || 'طن' }}</dd>
+                  }
+                  @for (b of bunkersOf(t.id); track b.id) {
+                    <dt>التاريخ</dt><dd>{{ dateLabel(b.date) }}</dd>
+                    <dt>الميناء</dt><dd>{{ b.port || '—' }}</dd>
+                    <dt>المورد</dt><dd>{{ b.supplier || '—' }}</dd>
+                    <dt>الكمية</dt><dd class="num">{{ fmt(b.qty, 1) }} {{ t.unit || 'طن' }}</dd>
+                    <dt>الفاتورة</dt><dd class="num">{{ b.invoice || '—' }}</dd>
+                    @if (b.sameDayUse != null) {
+                      <dt>استهلاك يوم التموين</dt><dd class="num">{{ fmt(b.sameDayUse, 1) }} {{ t.unit || 'طن' }}</dd>
+                    }
+                  }
+                  @if (k.voyage && k.outlook.expected !== null && (t.unit || 'طن') === 'طن') {
+                    <dt>الرحلة</dt><dd>{{ k.voyage.number }}</dd>
+                    <dt>الاستهلاك</dt><dd class="num">{{ fmt(k.outlook.expected, 1) }} طن</dd>
+                    <dt>أيام الرحلة</dt><dd class="num">{{ fmt(k.outlook.spanDays, 0) }}</dd>
+                    <dt>المعدل</dt><dd class="num">{{ fmt(k.outlook.rate, 2) }} طن/يوم</dd>
+                    @if (k.outlook.lasts !== null) {
+                      <dt>يكفي</dt><dd class="num">{{ fmt(k.outlook.lasts, 0) }} يوم</dd>
+                    }
+                  }
+                </dl>
                 <div class="row">
                   @if (s.can('bunker')) {
                     <button type="button" class="btn btn-sm btn-primary" (click)="openBunker(t.id)"><sc-icon name="plus" /> تزويد</button>
@@ -70,7 +90,7 @@ interface BunkerForm {
                   }
                 </div>
               </div>
-            } @else {
+            } @empty {
               <div class="empty">
                 لا يوجد خزان لهذا النوع.
                 @if (s.can('fleet')) {
@@ -83,18 +103,48 @@ interface BunkerForm {
       }
 
       <section class="card">
-        <div class="card-head"><h2>سجل التزويد</h2><span class="muted small">الإجمالي {{ usd(bunkerTotal()) }}</span></div>
+        <div class="card-head">
+          <h2>أرصدة الرحلة</h2>
+          @if (ledgerVoyage(); as voyage) {
+            <span class="muted small">{{ voyage.number }} · من {{ dateLabel(voyage.startDate) }} إلى {{ dateLabel(voyage.endDate) }}</span>
+          }
+        </div>
         <div class="card-body flush table-wrap">
           <table class="tbl">
-            <thead><tr><th>التاريخ</th><th>الخزان</th><th>الكمية</th><th>السعر/طن</th><th>الإجمالي</th><th>المورد</th><th>الميناء</th><th>الفاتورة</th></tr></thead>
+            <thead>
+              <tr><th>الصنف</th><th>الوحدة</th><th>استلام المركب</th><th>بداية الرحلة</th><th>المضاف</th><th>المستهلك</th><th>نهاية الرحلة</th></tr>
+            </thead>
+            <tbody>
+              @for (t of ledger(); track t.id) {
+                <tr>
+                  <td>{{ t.name }}</td>
+                  <td>{{ t.unit || 'طن' }}</td>
+                  <td class="num">{{ fmt(t.bob ?? 0, 1) }}</td>
+                  <td class="num">{{ fmt(t.opening ?? 0, 1) }}</td>
+                  <td class="num">{{ fmt(t.added ?? 0, 1) }}</td>
+                  <td class="num">{{ fmt(t.consumed ?? 0, 1) }}</td>
+                  <td class="num"><b>{{ fmt(t.current, 1) }}</b></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          @if (!ledger().length) { <div class="empty">لا توجد أرصدة مسجلة للرحلة.</div> }
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>سجل التزويد</h2><span class="muted small">الإجمالي {{ usd(bunkerTotal(), 2) }}</span></div>
+        <div class="card-body flush table-wrap">
+          <table class="tbl">
+            <thead><tr><th>التاريخ</th><th>الخزان</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th><th>المورد</th><th>الميناء</th><th>الفاتورة</th></tr></thead>
             <tbody>
               @for (b of s.data().bunkers; track b.id) {
                 <tr>
                   <td>{{ dateLabel(b.date) }}</td>
                   <td>{{ tankName(b.tankId) }}</td>
-                  <td class="num">{{ fmt(b.qty, 1) }} طن</td>
-                  <td class="num">{{ usd(b.pricePerTon) }}</td>
-                  <td class="num"><b>{{ usd(b.qty * b.pricePerTon) }}</b></td>
+                  <td class="num">{{ fmt(b.qty, 1) }} {{ tankUnit(b.tankId) }}</td>
+                  <td class="num">{{ usd(b.pricePerTon, 2) }}</td>
+                  <td class="num"><b>{{ usd(b.qty * b.pricePerTon, 2) }}</b></td>
                   <td>{{ b.supplier }}</td>
                   <td>{{ b.port }}</td>
                   <td class="small">{{ b.invoice || '—' }}</td>
@@ -208,25 +258,36 @@ export class ShTanks {
     const crew = this.s.crewOnBoard().length;
     return KINDS.map((kind) => {
       const g = kindGauge(this.s.tanks(), kind);
-      const tank = this.s.tanks().find((item) => item.kind === kind) ?? null;
+      const tanks = this.s.tanks().filter((item) => item.kind === kind);
       return {
         kind,
         label: TANK_KIND_LABEL[kind],
         g,
-        tank,
+        tanks,
+        voyage,
         outlook: voyageFuelOutlook(kind, g.current, voyage, config, crew),
       };
     });
   });
 
   readonly bunkerTotal = computed(() => this.s.data().bunkers.reduce((sum, b) => sum + b.qty * b.pricePerTon, 0));
+  readonly ledger = computed(() => this.s.tanks().filter((tank) => tank.opening != null));
+  readonly ledgerVoyage = computed(() => this.s.voyages().find((voyage) => voyage.id === AMANY_VOYAGE_ID) ?? null);
 
   label(k: TankKind): string {
     return TANK_KIND_LABEL[k];
   }
 
   gauge(t: Tank) {
-    return gaugeOf(t.current, t.max);
+    return gaugeOf(t.current, t.peak ?? t.max);
+  }
+
+  bunkersOf(tankId: string): BunkerRecord[] {
+    return this.s.data().bunkers.filter((record) => record.tankId === tankId);
+  }
+
+  tankUnit(id: string): string {
+    return this.s.tanks().find((tank) => tank.id === id)?.unit || 'طن';
   }
 
   tankName(id: string): string {
