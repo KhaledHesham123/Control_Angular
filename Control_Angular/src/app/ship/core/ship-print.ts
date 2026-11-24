@@ -1,6 +1,6 @@
 import { activeLines, today } from './ship-calc';
 import { certDocStatus, hasData } from './ship-certs';
-import { CERT_SECTIONS, Certificate, ReqLine, Requisition, Supplier, VesselProfile } from './ship.types';
+import { CERT_SECTIONS, Certificate, Hold, ReqLine, Requisition, Supplier, VesselProfile } from './ship.types';
 
 function esc(value: unknown): string {
   return String(value ?? '')
@@ -80,8 +80,8 @@ export function mailtoFor(vessel: VesselProfile, req: Requisition, groupId: stri
   return `mailto:${encodeURIComponent(supplier.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
-/** بطاقة مواصفات السفينة للتأجير. */
-export function particularsPrint(v: VesselProfile, certs: Certificate[]): void {
+/** بطاقة مواصفات السفينة. */
+export function particularsPrint(v: VesselProfile, certs: Certificate[], holds: Hold[] = []): void {
   const row = (k: string, val: unknown) => `<tr><td style="width:34%;background:#f3f6f7;font-weight:700">${esc(k)}</td><td>${esc(val) || '—'}</td></tr>`;
   const certRows = certs
     .filter((c) => c.section === 'cert' && hasData(c))
@@ -89,14 +89,15 @@ export function particularsPrint(v: VesselProfile, certs: Certificate[]): void {
     .join('');
   openPrint(
     `Ship Particulars — ${v.name}`,
-    `<header class="doc"><div><h1>${esc(v.name)}</h1><p>Ship Particulars — بطاقة مواصفات السفينة</p></div><div style="text-align:left"><span class="tag">${v.availableForCharter ? 'متاحة للتأجير' : 'غير متاحة'}</span></div></header>
+    `<header class="doc"><div><h1>${esc(v.name)}</h1><p>Ship Particulars — بطاقة مواصفات السفينة</p></div></header>
      <table><tbody>
       ${row('الاسم السابق', v.formerName)}${row('إشارة النداء', v.callSign)}${row('IMO', v.imo)}${row('العلم', v.flag)}${row('النوع', v.type)}
       ${row('هيئة التصنيف', v.classSociety)}${row('سنة البناء', v.buildYear)}${row('المالك / المشغّل', v.owner)}
       ${row('DWT', v.dwt)}${row('GRT / NRT', `${v.grt} / ${v.nrt}`)}${row('الأبعاد (LOA × Beam × Draft)', `${v.loa ?? '—'} × ${v.beam ?? '—'} × ${v.draft ?? '—'} م`)}
       ${row('سعة الحبوب / البالة', `${v.grainCapacity ?? '—'} / ${v.baleCapacity ?? '—'} م³`)}${row('المحرك الرئيسي', v.mainEngine)}${row('الأوناش', v.cranes)}
-      ${row('السرعة', `${v.speedKn} عقدة`)}${row('الموقع الحالي', v.location)}${v.charterRate ? row('سعر التأجير التقريبي', `$${v.charterRate}/يوم`) : ''}
+      ${row('السرعة', `${v.speedKn} عقدة`)}
      </tbody></table>
+     ${holds.length ? `<h2>سعة العنابر</h2><table><thead><tr><th>العنبر</th><th>السعة (طن)</th><th>المحمّل (طن)</th><th>المتاح (طن)</th></tr></thead><tbody>${holds.map((h) => `<tr><td>${esc(h.name)}</td><td>${esc(h.capacity)}</td><td>${esc(h.loaded)}</td><td>${esc(h.capacity - h.loaded)}</td></tr>`).join('')}</tbody></table>` : ''}
      ${certRows ? `<h2>الشهادات</h2><table><thead><tr><th>الشهادة</th><th>الجهة</th><th>الإصدار</th><th>الانتهاء / الاستحقاق</th></tr></thead><tbody>${certRows}</tbody></table>` : ''}
      ${v.notes ? `<div class="note">${esc(v.notes)}</div>` : ''}`,
   );

@@ -101,7 +101,7 @@ export interface Generator {
   defaultHours: number;
 }
 
-export type DailyKind = 'Water' | 'Gasoline' | 'Diesel';
+export type DailyKind = 'Water' | 'Gasoline' | 'Diesel' | 'Lubricant';
 export type DailyMotion = 'Sailing' | 'Stopped';
 
 export interface DailyRate {
@@ -628,7 +628,6 @@ export const SHIP_NAV: NavSection[] = [
       { route: '/ship/planner', label: 'مخطط المسار والمقارنة', icon: 'compass', perm: 'voyages' },
       { route: '/ship/ports', label: 'الموانئ وأسعار الوقود', icon: 'anchor' },
       { route: '/ship/clients', label: 'العملاء والشحنات', icon: 'users2' },
-      { route: '/ship/cargo', label: 'سعة العنابر', icon: 'cube' },
     ],
   },
   {

@@ -239,7 +239,7 @@ const COLORS = ['#167a82', '#d4a857', '#2b6cb0', '#6b4fb3', '#1b8a5a', '#c0392b'
               <label class="field"><span>تاريخ النهاية</span><input type="date" [(ngModel)]="form.endDate" /></label>
               <label class="field"><span>عدد أيام الرحلة</span><input type="number" min="1" step="1" [ngModel]="formSpan()" (ngModelChange)="setSpan($event)" /></label>
               <div class="field wide">
-                <span>معدل الاستهلاك المتوقع للرحلة (طن) — مدة الرحلة {{ formSpan() }} يوم</span>
+                <span>الاستهلاك المتوقع لهذه الرحلة فقط (طن) — مدة الرحلة {{ formSpan() }} يوم. المعدل الثابت للسفينة لا يتغير من هنا.</span>
                 @for (row of form.consumptions ?? []; track row.kind) {
                   <div class="row">
                     <b>{{ consumptionLabel(row.kind) }}</b>
@@ -503,13 +503,16 @@ export class ShVoyages {
   }
 
   private consumptionOf(voyage: Voyage): VoyageConsumption[] {
-    if (voyage.consumptions?.length) return voyage.consumptions.map((row) => ({ kind: row.kind, quantity: num(row.quantity) }));
-    const rows: VoyageConsumption[] = [];
-    if (voyage.expectedHfo > 0) rows.push({ kind: 'HeavyFuel', quantity: voyage.expectedHfo });
-    if (voyage.expectedMgo > 0) rows.push({ kind: 'Diesel', quantity: voyage.expectedMgo });
-    if (voyage.expectedLube > 0) rows.push({ kind: 'Lubricant', quantity: voyage.expectedLube });
-    if (num(voyage.expectedWater) > 0) rows.push({ kind: 'Water', quantity: num(voyage.expectedWater) });
-    return rows;
+    const stored = new Map((voyage.consumptions ?? []).map((row) => [row.kind, num(row.quantity)]));
+    const fallback = (kind: ConsumptionKind) => {
+      if (stored.has(kind)) return stored.get(kind) ?? 0;
+      if (kind === 'HeavyFuel') return num(voyage.expectedHfo);
+      if (kind === 'Diesel') return num(voyage.expectedMgo);
+      if (kind === 'Lubricant') return num(voyage.expectedLube);
+      if (kind === 'Water') return num(voyage.expectedWater);
+      return 0;
+    };
+    return CONSUMPTION_KINDS.map((item) => ({ kind: item.id, quantity: fallback(item.id) }));
   }
 
   private applyRows(form: Voyage): void {

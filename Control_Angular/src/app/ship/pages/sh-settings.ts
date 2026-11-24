@@ -11,7 +11,7 @@ import { DailyKind, DailyMotion, DailyRate, ShipConfig, StatusLogEntry } from '.
       <div class="page-head">
         <div>
           <h1>أرقام التشغيل</h1>
-          <p>معدلات الاستهلاك اللي بيحسب بيها التقرير اليومي ومخطط الرحلات. عدّلها لتطابق السفينة الفعلية.</p>
+          <p>المعدلات دي ثابتة للسفينة نفسها: كم بنزين وديزل وزيوت ومياه وهي ماشية، وكم وهي واقفة. استهلاك رحلة بعينها يتسجل داخل الرحلة.</p>
         </div>
         <button type="button" class="btn btn-primary" [disabled]="!s.can('fleet') && !s.can('daily')" (click)="save()"><sc-icon name="check" /> حفظ</button>
       </div>
@@ -44,7 +44,7 @@ import { DailyKind, DailyMotion, DailyRate, ShipConfig, StatusLogEntry } from '.
       </section>
 
       <section class="card">
-        <div class="card-head"><h2>الاستهلاك اليومي الثابت</h2></div>
+        <div class="card-head"><h2>استهلاك السفينة الثابت</h2><small>مش مرتبط برحلة</small></div>
         <div class="card-body flush table-wrap">
           <table class="tbl">
             <thead><tr><th>النوع</th><th>وهي ماشية (طن/يوم)</th><th>وهي واقفة (طن/يوم)</th><th></th></tr></thead>
@@ -111,7 +111,7 @@ import { DailyKind, DailyMotion, DailyRate, ShipConfig, StatusLogEntry } from '.
         <div class="card-head"><h2>البيانات</h2></div>
         <div class="card-body stack">
           <div class="alert"><sc-icon name="info" /> حالة السفينة ومعدلات المياه والبنزين والديزل تتحفظ على الخادم، وسجل التغيير يفضل موجود.</div>
-          <div><button type="button" class="btn btn-danger" (click)="reset()"><sc-icon name="refresh" /> إعادة البيانات التجريبية</button></div>
+          <div><button type="button" class="btn btn-danger" (click)="reset()"><sc-icon name="refresh" /> مسح بيانات اللوحة</button></div>
         </div>
       </section>
     </div>
@@ -126,6 +126,7 @@ export class ShSettings {
     { id: 'Water', label: 'مياه' },
     { id: 'Gasoline', label: 'بنزين' },
     { id: 'Diesel', label: 'ديزل' },
+    { id: 'Lubricant', label: 'زيوت' },
   ];
 
   constructor() {
@@ -141,9 +142,11 @@ export class ShSettings {
   private load(id: string): void {
     this.s.dailyRates().subscribe((rows) => {
       if (this.s.vessel().id !== id) return;
-      this.rates = rows;
-      this.c = { ...this.c, dailyRates: rows };
-      this.s.applyDailyRates(rows);
+      const local = this.s.data().config.dailyRates ?? [];
+      const rates = rows.length ? rows : local;
+      this.rates = rates;
+      this.c = { ...this.c, dailyRates: rates };
+      if (rows.length) this.s.applyDailyRates(rows);
     });
     this.s.statusLog().subscribe((rows) => {
       if (this.s.vessel().id === id) this.logs = rows;
@@ -217,7 +220,7 @@ export class ShSettings {
   }
 
   reset(): void {
-    if (window.confirm('سيتم حذف كل التعديلات المحلية والرجوع للبيانات التجريبية. متأكد؟')) {
+    if (window.confirm('سيتم مسح بيانات اللوحة من الشاشة ومن قاعدة البيانات. متأكد؟')) {
       this.s.resetDemo();
       this.c = this.copy();
     }

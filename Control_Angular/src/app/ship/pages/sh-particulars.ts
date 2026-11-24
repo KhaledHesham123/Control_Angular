@@ -2,11 +2,12 @@ import { Component, DestroyRef, computed, effect, inject, signal, untracked } fr
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { map } from 'rxjs';
+import { gaugeOf, num } from '../core/ship-calc';
 import { certDocStatus, hasData } from '../core/ship-certs';
-import { dateLabel } from '../core/ship-format';
+import { dateLabel, fmt } from '../core/ship-format';
 import { particularsPrint } from '../core/ship-print';
 import { ShipStore } from '../core/ship-store';
-import { Certificate, VesselProfile } from '../core/ship.types';
+import { Certificate, Hold, VesselProfile } from '../core/ship.types';
 
 @Component({
   selector: 'sh-particulars',
@@ -16,7 +17,7 @@ import { Certificate, VesselProfile } from '../core/ship.types';
       <div class="page-head">
         <div>
           <h1>مواصفات {{ f.name || 'السفينة' }}</h1>
-          <p>بطاقة هذه السفينة: الاسم السابق، التصنيف، الأبعاد، السعات، المحرك والأوناش، مع شهادات السفينة.</p>
+          <p>بطاقة هذه السفينة: الهوية، الأبعاد، المحرك والأوناش، وسعة العنابر، مع شهادات السفينة.</p>
         </div>
         <div class="actions">
           <a class="btn" routerLink="/ship/fleet"><sc-icon name="back" /> الأسطول</a>
@@ -70,21 +71,62 @@ import { Certificate, VesselProfile } from '../core/ship.types';
           <div class="card-body form-grid">
             <label class="field wide"><span>المحرك الرئيسي</span><input type="text" [(ngModel)]="f.mainEngine" /></label>
             <label class="field wide"><span>الأوناش</span><input type="text" [(ngModel)]="f.cranes" /></label>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="card-head"><h2>الموقع والتأجير</h2></div>
-          <div class="card-body form-grid">
-            <label class="field wide"><span>الموقع الحالي (وصف)</span><input type="text" [(ngModel)]="f.location" /></label>
-            <label class="field"><span>خط العرض</span><input type="number" step="any" [(ngModel)]="f.lat" /></label>
-            <label class="field"><span>خط الطول</span><input type="number" step="any" [(ngModel)]="f.lng" /></label>
-            <label class="field"><span>سعر التأجير التقريبي (USD/يوم)</span><input type="number" [(ngModel)]="f.charterRate" /></label>
-            <label class="check" style="align-self:end"><input type="checkbox" [(ngModel)]="f.availableForCharter" /> متاحة للتأجير</label>
             <label class="field wide"><span>ملاحظات</span><textarea rows="2" [(ngModel)]="f.notes"></textarea></label>
           </div>
         </section>
       </fieldset>
+
+      <section class="card">
+        <div class="card-head"><h2>سعة العنابر</h2></div>
+        <div class="card-body stack">
+          @if (drawingHolds()) {
+            <div class="kpis">
+              <div class="kpi"><label>عدد العنابر</label><strong>{{ s.data().holds.length }}</strong></div>
+              <div class="kpi ok"><label>سعة الحبوب</label><strong>{{ fmt(totalCap(), 0) }} م³</strong></div>
+              <div class="kpi gold"><label>الفتحتان</label><strong>25.15 × 12.57 م</strong></div>
+            </div>
+            <p class="muted small">عنبر واحد أبعاده 52 × 12.6 × 8.275 م، وفتحتان من نوع McGregor. الرقم سعة الحبوب بالمتر المكعب، مش حمولة بالطن.</p>
+          } @else {
+            <div class="kpis">
+              <div class="kpi"><label>السعة الكلية</label><strong>{{ fmt(totalCap(), 0) }} طن</strong></div>
+              <div class="kpi ok"><label>المحمّل</label><strong>{{ fmt(totalLoaded(), 0) }} طن</strong></div>
+              <div class="kpi gold"><label>المتاح</label><strong>{{ fmt(totalCap() - totalLoaded(), 0) }} طن</strong></div>
+            </div>
+          }
+          <div class="grid g2">
+            @for (h of s.data().holds; track h.id) {
+              <section class="card">
+                <div class="card-head"><h3>{{ h.name }}</h3>@if (!drawingHolds()) { <span class="badge info">{{ fmt(g(h).percent, 0) }}%</span> }</div>
+                <div class="card-body stack">
+                  <div class="value" style="font-size:1.4rem;font-weight:800"><span class="num">{{ fmt(drawingHolds() ? h.capacity : h.loaded, 0) }}</span> <small class="muted">{{ drawingHolds() ? 'م³ حبوب' : '/ ' + fmt(h.capacity, 0) + ' طن' }}</small></div>
+                  @if (!drawingHolds()) {
+                    <div class="gauge" [class]="'gauge ' + (g(h).percent > 90 ? 'bad' : 'ok')"><i [style.width.%]="g(h).percent"></i></div>
+                    <div class="muted small">المتاح {{ fmt(h.capacity - h.loaded, 0) }} طن</div>
+                  }
+                  @if (!drawingHolds() && s.can('voyages')) {
+                    <div class="row">
+                      <input type="number" min="0" style="width:140px" [value]="h.loaded" #inp />
+                      <button type="button" class="btn btn-sm" (click)="s.setHoldLoad(h.id, num(inp.value))">تحديث يدوي</button>
+                    </div>
+                  }
+                  <div>
+                    <b class="small">الشحنات في هذا العنبر</b>
+                    @for (x of shipmentsIn(h.name); track x.id) {
+                      <div class="between row small" style="padding:4px 0;border-bottom:1px dashed var(--line)">
+                        <span>{{ x.ref }} · {{ x.commodity }}</span><b class="num">{{ fmt(x.tons, 0) }} طن</b>
+                      </div>
+                    }
+                    @if (!shipmentsIn(h.name).length) { <div class="muted small">لا شحنات.</div> }
+                  </div>
+                </div>
+              </section>
+            }
+          </div>
+          @if (!s.data().holds.length) {
+            <div class="empty">لا توجد عنابر لهذه السفينة.</div>
+          }
+        </div>
+      </section>
 
       <section class="card">
         <div class="card-head"><h2>الشهادات</h2><a class="btn btn-sm" routerLink="/ship/certificates">إدارة الشهادات</a></div>
@@ -113,7 +155,15 @@ export class ShParticulars {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   readonly dateLabel = dateLabel;
+  readonly fmt = fmt;
+  readonly num = num;
   readonly stored = signal(false);
+  readonly totalCap = computed(() => this.s.data().holds.reduce((a, h) => a + h.capacity, 0));
+  readonly totalLoaded = computed(() => this.s.data().holds.reduce((a, h) => a + h.loaded, 0));
+  readonly drawingHolds = computed(() => {
+    const vessel = this.s.vessel();
+    return vessel.imo.replace(/\s/g, '') === '8318128' || vessel.name.toUpperCase().includes('AMANY');
+  });
   f: VesselProfile = { ...this.s.vessel() };
   private readonly routeId = toSignal(this.route.paramMap.pipe(map((params) => params.get('id') ?? '')), {
     initialValue: this.route.snapshot.paramMap.get('id') ?? '',
@@ -139,7 +189,6 @@ export class ShParticulars {
       .subscribe((row) => {
         if (this.loadedFor !== id) return;
         this.stored.set(!!row);
-        if (row) this.f = { ...this.f, ...row, id };
       });
   }
 
@@ -147,6 +196,15 @@ export class ShParticulars {
 
   state(c: Certificate) {
     return certDocStatus(c);
+  }
+
+  g(h: Hold) {
+    return gaugeOf(h.loaded, h.capacity);
+  }
+
+  shipmentsIn(holdName: string) {
+    const active = this.s.activeVoyage()?.id;
+    return this.s.data().shipments.filter((x) => x.voyageId === active && !x.status.includes('التفريغ') && (x.hold === holdName || x.hold === 'العنبران'));
   }
 
   save(): void {
@@ -165,6 +223,6 @@ export class ShParticulars {
   }
 
   print(): void {
-    particularsPrint(this.f, this.s.data().certificates);
+    particularsPrint(this.f, this.s.data().certificates, this.s.data().holds);
   }
 }

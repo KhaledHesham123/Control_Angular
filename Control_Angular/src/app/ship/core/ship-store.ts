@@ -16,7 +16,10 @@ import {
   today,
   uid,
 } from './ship-calc';
-import { buildSeed, emptyVessel, emptyVesselData, STATE_VERSION } from './ship-seed';
+import { buildCertRegister } from './ship-certs';
+import { AMANY_CERTS } from './ship-certs-amany';
+import { amanyConfig, amanyHolds, amanyQueen, emptyVessel, emptyVesselData, STATE_VERSION } from './ship-seed';
+import { AMANY_CATEGORIES, AMANY_PRODUCTS, AMANY_STOCK } from './ship-stores-amany';
 import {
   BunkerRecord,
   CargoClient,
@@ -81,9 +84,8 @@ export class ShipStore {
   private readonly files = inject(ShipFiles);
   private readonly http = inject(HttpClient);
   private loaded = true;
-  private readonly opening = buildSeed();
-  readonly state = signal<ShipState>(this.opening);
-  readonly vesselId = signal<string>(this.opening.vessels[0]?.id ?? '');
+  readonly state = signal<ShipState>(ShipStore.display());
+  readonly vesselId = signal('11');
   readonly role = signal<ShipRole>('Admin');
   readonly toast = signal<Toast | null>(null);
 
@@ -98,7 +100,11 @@ export class ShipStore {
     const s = this.state();
     return s.vessels.find((v) => v.id === this.vesselId()) ?? s.vessels[0] ?? emptyVessel('', '…');
   });
-  readonly data = computed<VesselData>(() => this.state().data[this.vessel().id] ?? emptyVesselData());
+  readonly data = computed<VesselData>(() => {
+    const id = this.vessel().id;
+    if (!id) return { ...emptyVesselData(), certificates: [] };
+    return this.state().data[id] ?? emptyVesselData();
+  });
 
   readonly tanks = computed(() => this.data().tanks);
   readonly crew = computed(() => this.data().crew);
@@ -123,10 +129,6 @@ export class ShipStore {
     }
   });
 
-  constructor() {
-    this.refresh();
-  }
-
   /* ───────────── تحميل وحفظ ───────────── */
 
   private static blank(): ShipState {
@@ -142,19 +144,24 @@ export class ShipStore {
     };
   }
 
-  private refresh(): void {
-    let params = new HttpParams();
-    if (this.vesselId()) {
-      params = params.set('vesselId', this.vesselId());
-    }
-    this.http.get<Result<ShipState>>(`${SHIP_API}/Board`, { params }).subscribe({
-      next: (result) => {
-        if (result.succeeded && result.data?.vessels?.length) {
-          this.applyServerState(result);
-        }
+  /** بيانات العرض المحلية. مش بتتبعت للباك. */
+  private static display(): ShipState {
+    const ship = amanyQueen();
+    return {
+      ...ShipStore.blank(),
+      vessels: [ship],
+      categories: AMANY_CATEGORIES,
+      products: AMANY_PRODUCTS,
+      data: {
+        [ship.id]: {
+          ...emptyVesselData(),
+          holds: amanyHolds(),
+          stock: AMANY_STOCK,
+          config: amanyConfig(),
+          certificates: buildCertRegister(ship.id, AMANY_CERTS),
+        },
       },
-      error: () => undefined,
-    });
+    };
   }
 
   private send(method: 'put' | 'post' | 'delete', path: string, body?: unknown, query?: Record<string, string | number>): void {
@@ -185,7 +192,7 @@ export class ShipStore {
   }
 
   private applyServerState(result: Result<ShipState>, fallback = ''): void {
-    if (!result.succeeded || !result.data?.vessels?.length) {
+    if (!result.succeeded || !result.data) {
       this.loaded = true;
       if (fallback) {
         this.notify(result.messages?.join(' ') || fallback, 'bad');
@@ -252,12 +259,14 @@ export class ShipStore {
 
   resetDemo(): void {
     this.http.post<Result<ShipState>>(`${SHIP_API}/Reset`, {}).subscribe({
-      next: () => {
-        const seed = buildSeed();
-        this.state.set(seed);
-        this.vesselId.set(seed.vessels[0]?.id ?? '');
-        this.loaded = true;
-        this.notify('رجعت بيانات الشاشة التجريبية، من غير زرعها في قاعدة البيانات.');
+      next: (result) => {
+        if (result.succeeded && result.data) this.applyServerState(result);
+        else {
+          this.state.set(ShipStore.blank());
+          this.vesselId.set('');
+          this.loaded = true;
+        }
+        this.notify('تم مسح بيانات اللوحة.');
       },
       error: () => this.notify('تعذر مسح بيانات السيرفر.', 'bad'),
     });

@@ -118,7 +118,7 @@ export class ShFleet {
       if (!el) return;
       this.map ??= new ShipMap(el);
       void this.map.draw(
-        vessels.map((v) => ({
+        vessels.filter((v) => v.lat !== 0 || v.lng !== 0).map((v) => ({
           lat: v.lat,
           lng: v.lng,
           label: v.name,

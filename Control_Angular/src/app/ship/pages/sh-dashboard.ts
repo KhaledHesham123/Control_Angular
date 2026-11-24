@@ -88,6 +88,21 @@ const POWER_LABEL: Record<string, string> = {
         }
       </div>
 
+      <section class="card">
+        <div class="card-head">
+          <h2>الهيكل ثلاثي الأبعاد</h2>
+          <small>{{ hullName() }} · IMO {{ hullImo() }}</small>
+        </div>
+        <div class="card-body flush">
+          <sh-viewer
+            [name]="hullName()"
+            [imo]="hullImo()"
+            [loa]="s.vessel().loa"
+            [beam]="s.vessel().beam"
+            [draft]="s.vessel().draft" />
+        </div>
+      </section>
+
       <div class="grid g-main">
         <section class="card">
           <div class="card-head">
@@ -264,6 +279,8 @@ export class ShDashboard {
 
   readonly onLeave = computed(() => this.s.crew().filter((c) => c.status === 'OnLeave').length);
   readonly activeProducts = computed(() => this.s.products().filter((p) => p.active).length);
+  readonly hullName = computed(() => (this.s.vessel().id ? this.s.vessel().name : 'AMANY QUEEN'));
+  readonly hullImo = computed(() => (this.s.vessel().id ? this.s.vessel().imo : '8318128'));
 
   readonly low = computed(() => {
     const stock = this.s.data().stock;
@@ -346,7 +363,7 @@ export class ShDashboard {
       void this.map.draw(
         [
           ...stops.map((x) => ({ lat: x.p!.lat, lng: x.p!.lng, label: x.p!.name, index: x.i + 1, tone: 'navy' as const, popup: `<b>${x.p!.name}</b><br>ETA ${x.st.eta}` })),
-          { lat: vessel.lat, lng: vessel.lng, label: vessel.name, tone: 'gold' as const, popup: `<b>${vessel.name}</b><br>${vessel.location}` },
+          ...(vessel.id ? [{ lat: vessel.lat, lng: vessel.lng, label: vessel.name, tone: 'gold' as const, popup: `<b>${vessel.name}</b><br>${vessel.location}` }] : []),
         ],
         [{ points: stops.map((x) => [x.p!.lat, x.p!.lng] as [number, number]) }],
       );

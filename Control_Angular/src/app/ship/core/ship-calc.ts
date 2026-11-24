@@ -5,6 +5,7 @@ import {
   PortStop,
   Product,
   Category,
+  DailyKind,
   Requisition,
   ShipConfig,
   Supplier,
@@ -127,7 +128,7 @@ export function onBoardCount(crew: CrewMember[]): number {
   return crew.filter((c) => c.status === 'OnBoard').length;
 }
 
-function storedDaily(config: ShipConfig, kind: 'Water' | 'Gasoline' | 'Diesel'): number | null {
+function storedDaily(config: ShipConfig, kind: DailyKind): number | null {
   const motion = config.mode === 'port' ? 'Stopped' : 'Sailing';
   const row = config.dailyRates?.find((item) => item.kind === kind && item.motion === motion);
   return row ? row.tonsPerDay : null;
@@ -137,7 +138,7 @@ function storedDaily(config: ShipConfig, kind: 'Water' | 'Gasoline' | 'Diesel'):
 export function dailyBurn(kind: TankKind, config: ShipConfig, crewOnBoard: number): number {
   const gens = config.power === 'aux_gen' ? config.generators.reduce((s, g) => s + g.tonsPerHour * g.defaultHours, 0) : 0;
   if (kind === 'hfo') {
-    return storedDaily(config, 'Gasoline') ?? (config.mode === 'sea' ? config.hfoTonsPerDaySea : 0.1);
+    return config.mode === 'sea' ? config.hfoTonsPerDaySea : 0;
   }
   if (kind === 'mgo') {
     const diesel = storedDaily(config, 'Diesel');
@@ -147,6 +148,8 @@ export function dailyBurn(kind: TankKind, config: ShipConfig, crewOnBoard: numbe
     return gens + boiler + port;
   }
   if (kind === 'lube') {
+    const oil = storedDaily(config, 'Lubricant');
+    if (oil != null) return oil;
     return config.lubeTonsPerHour * (config.mode === 'sea' ? 24 : 12);
   }
   return storedDaily(config, 'Water') ?? (crewOnBoard * config.waterLitersPerPersonDay) / 1000 + 0.4;

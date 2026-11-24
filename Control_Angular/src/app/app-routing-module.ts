@@ -36,7 +36,6 @@ import { ShVoyages } from './ship/pages/sh-voyages';
 import { ShPlanner } from './ship/pages/sh-planner';
 import { ShPorts } from './ship/pages/sh-ports';
 import { ShClients } from './ship/pages/sh-clients';
-import { ShCargo } from './ship/pages/sh-cargo';
 import { ShSuppliers } from './ship/pages/sh-suppliers';
 import { ShCatalog } from './ship/pages/sh-catalog';
 import { ShCrew } from './ship/pages/sh-crew';
@@ -97,7 +96,7 @@ const routes: Routes = [
           { path: 'planner', component: ShPlanner },
           { path: 'ports', component: ShPorts },
           { path: 'clients', component: ShClients },
-          { path: 'cargo', component: ShCargo },
+          { path: 'cargo', redirectTo: 'particulars', pathMatch: 'full' },
           { path: 'suppliers', component: ShSuppliers },
           { path: 'catalog', component: ShCatalog },
           { path: 'crew', component: ShCrew },

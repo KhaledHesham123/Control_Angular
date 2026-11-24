@@ -28,6 +28,7 @@ import { VesselsList } from './vessels/vessels-list';
 import { ShipShell } from './ship/ship-shell';
 import { ShipIcon } from './ship/ui/ship-icon';
 import { ShipCatTree } from './ship/ui/ship-cat-tree';
+import { ShipViewer } from './ship/ui/ship-viewer';
 import { ShDashboard } from './ship/pages/sh-dashboard';
 import { ShReports } from './ship/pages/sh-reports';
 import { ShFleet } from './ship/pages/sh-fleet';
@@ -43,7 +44,6 @@ import { ShVoyages } from './ship/pages/sh-voyages';
 import { ShPlanner } from './ship/pages/sh-planner';
 import { ShPorts } from './ship/pages/sh-ports';
 import { ShClients } from './ship/pages/sh-clients';
-import { ShCargo } from './ship/pages/sh-cargo';
 import { ShSuppliers } from './ship/pages/sh-suppliers';
 import { ShCatalog } from './ship/pages/sh-catalog';
 import { ShCrew } from './ship/pages/sh-crew';
@@ -67,6 +67,7 @@ import { ShSettings } from './ship/pages/sh-settings';
     ShipShell,
     ShipIcon,
     ShipCatTree,
+    ShipViewer,
     ShDashboard,
     ShReports,
     ShFleet,
@@ -82,7 +83,6 @@ import { ShSettings } from './ship/pages/sh-settings';
     ShPlanner,
     ShPorts,
     ShClients,
-    ShCargo,
     ShSuppliers,
     ShCatalog,
     ShCrew,
